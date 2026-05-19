@@ -1,0 +1,15 @@
+{
+  "rice": { "areaRatio": 0.42, "estimatedGrams": 170 },
+  "chicken": { "areaRatio": 0.28, "estimatedGrams": 125 },
+  "salad": { "areaRatio": 0.18, "estimatedGrams": 80 },
+  "beef": { "areaRatio": 0.24, "estimatedGrams": 110 },
+  "fish": { "areaRatio": 0.24, "estimatedGrams": 120 },
+  "egg": { "areaRatio": 0.12, "estimatedGrams": 60 },
+  "noodles": { "areaRatio": 0.38, "estimatedGrams": 160 },
+  "pasta": { "areaRatio": 0.38, "estimatedGrams": 160 },
+  "bread": { "areaRatio": 0.18, "estimatedGrams": 90 },
+  "potato": { "areaRatio": 0.22, "estimatedGrams": 140 },
+  "fruit": { "areaRatio": 0.18, "estimatedGrams": 100 },
+  "vegetables": { "areaRatio": 0.2, "estimatedGrams": 110 },
+  "default": { "areaRatio": 0.22, "estimatedGrams": 120 }
+}

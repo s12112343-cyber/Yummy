@@ -1,0 +1,15 @@
+{
+  "rice": { "calories": 130, "protein": 2.7, "carbs": 28.2, "fat": 0.3 },
+  "chicken": { "calories": 165, "protein": 31.0, "carbs": 0.0, "fat": 3.6 },
+  "salad": { "calories": 20, "protein": 1.5, "carbs": 3.5, "fat": 0.2 },
+  "beef": { "calories": 217, "protein": 26.0, "carbs": 0.0, "fat": 12.0 },
+  "fish": { "calories": 120, "protein": 22.0, "carbs": 0.0, "fat": 3.0 },
+  "egg": { "calories": 155, "protein": 13.0, "carbs": 1.1, "fat": 11.0 },
+  "noodles": { "calories": 138, "protein": 4.8, "carbs": 25.0, "fat": 1.2 },
+  "pasta": { "calories": 131, "protein": 5.0, "carbs": 25.0, "fat": 1.1 },
+  "bread": { "calories": 265, "protein": 9.0, "carbs": 49.0, "fat": 3.2 },
+  "potato": { "calories": 77, "protein": 2.0, "carbs": 17.0, "fat": 0.1 },
+  "fruit": { "calories": 52, "protein": 0.6, "carbs": 13.0, "fat": 0.2 },
+  "vegetables": { "calories": 35, "protein": 2.0, "carbs": 7.0, "fat": 0.2 },
+  "default": { "calories": 150, "protein": 6.0, "carbs": 20.0, "fat": 4.0 }
+}

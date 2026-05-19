@@ -1,0 +1,38 @@
+# secrets
+.env
+backend/.env
+backend/serviceAccount.json
+serviceAccount.json
+
+# python virtual environments
+.venv/
+backend/.venv/
+ai/.venv/
+venv/
+env/
+
+# python cache
+__pycache__/
+*.pyc
+
+# node
+backend/node_modules/
+node_modules/
+
+# flutter/cache/build
+frontend/build/
+frontend/.dart_tool/
+frontend/.firebase/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+
+# uploads from local testing
+backend/uploads/
+
+# large AI/model files
+*.pt
+*.pth
+*.onnx
+*.h5
+*.keras
+*.tflite

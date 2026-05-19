@@ -1,0 +1,9 @@
+ultralytics
+tensorflow
+pillow
+numpy
+opencv-python
+
+# This override file lists the packages you explicitly requested. On systems
+# where TensorFlow has no wheel for the current Python version (e.g. 3.14),
+# installation may fail — prefer Python 3.11/3.12 for TensorFlow.

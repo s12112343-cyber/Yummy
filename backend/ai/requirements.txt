@@ -1,0 +1,13 @@
+numpy>=1.26
+pillow>=10.4
+opencv-python-headless>=4.10
+ultralytics>=8.3
+
+# Optional when using FoodSAM / SAM masks.
+segment-anything @ git+https://github.com/facebookresearch/segment-anything.git
+
+# Required for real Nutrition5k regression on Python 3.11/3.12.
+tensorflow>=2.16; python_version < "3.14"
+
+# Roboflow inference SDK (optional): installs the client used to call serverless Roboflow models
+inference-sdk>=0.31
