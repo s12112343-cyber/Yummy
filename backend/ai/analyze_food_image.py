@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List
 
 import requests
+from PIL import Image
 
 
 BASE_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = BASE_DIR.parent
 ENV_FILE = BACKEND_DIR / ".env"
+DEFAULT_MEAL_MODEL_ID = "onnx-community/swin-finetuned-food101-ONNX"
+DEFAULT_MEAL_THRESHOLD = 0.60
 
 
 class AIModelError(RuntimeError):
@@ -109,6 +114,96 @@ def _extract_predictions(raw_result: Any) -> List[Dict[str, Any]]:
     return [prediction for prediction in predictions if isinstance(prediction, dict)]
 
 
+def _format_meal_label(label: str) -> str:
+    text = str(label or "").replace("_", " ").replace("-", " ").strip()
+    return text.title() if text else "Detected Meal"
+
+
+def _meal_threshold() -> float:
+    try:
+        value = float(os.getenv("DETECTED_MEAL_THRESHOLD", str(DEFAULT_MEAL_THRESHOLD)))
+        if 0.0 <= value <= 1.0:
+            return value
+    except Exception:
+        pass
+    return DEFAULT_MEAL_THRESHOLD
+
+
+@lru_cache(maxsize=1)
+def _load_meal_classifier():
+    model_id = os.getenv("FOOD_MEAL_MODEL_ID", DEFAULT_MEAL_MODEL_ID).strip() or DEFAULT_MEAL_MODEL_ID
+
+    try:
+        transformers_module = importlib.import_module("transformers")
+        pipeline = transformers_module.pipeline
+
+        try:
+            return pipeline("image-classification", model=model_id)
+        except Exception:
+            pass
+    except Exception:
+        return None
+
+    try:
+        optimum_module = importlib.import_module("optimum.onnxruntime")
+        transformers_module = importlib.import_module("transformers")
+        ORTModelForImageClassification = optimum_module.ORTModelForImageClassification
+        AutoImageProcessor = transformers_module.AutoImageProcessor
+        pipeline = transformers_module.pipeline
+
+        processor = AutoImageProcessor.from_pretrained(model_id)
+        model = ORTModelForImageClassification.from_pretrained(model_id)
+        return pipeline("image-classification", model=model, image_processor=processor)
+    except Exception:
+        return None
+
+
+def _classify_entire_meal(image_path: str) -> Dict[str, Any] | None:
+    classifier = _load_meal_classifier()
+    if classifier is None:
+        return None
+
+    try:
+        with Image.open(image_path) as image:
+            rgb_image = image.convert("RGB")
+
+        predictions = classifier(rgb_image, top_k=3)
+        if isinstance(predictions, dict):
+            predictions = [predictions]
+
+        if not predictions:
+            return None
+
+        top_prediction = predictions[0]
+        if not isinstance(top_prediction, dict):
+            return None
+
+        confidence = float(top_prediction.get("score") or top_prediction.get("confidence") or 0.0)
+        if confidence < _meal_threshold():
+            return None
+
+        candidates = []
+        for prediction in predictions[:3]:
+            if not isinstance(prediction, dict):
+                continue
+            candidates.append(
+                {
+                    "name": _format_meal_label(prediction.get("label") or prediction.get("name") or ""),
+                    "confidence": round(float(prediction.get("score") or prediction.get("confidence") or 0.0), 4),
+                }
+            )
+
+        model_id = os.getenv("FOOD_MEAL_MODEL_ID", DEFAULT_MEAL_MODEL_ID).strip() or DEFAULT_MEAL_MODEL_ID
+        return {
+            "name": _format_meal_label(top_prediction.get("label") or top_prediction.get("name") or "Detected Meal"),
+            "confidence": round(confidence, 4),
+            "model": model_id,
+            "candidates": candidates,
+        }
+    except Exception:
+        return None
+
+
 def analyze_food_image(image_path: str) -> Dict[str, Any]:
     _load_env_file(ENV_FILE)
 
@@ -198,6 +293,8 @@ def analyze_food_image(image_path: str) -> Dict[str, Any]:
         for prediction in predictions
     ]
 
+    detected_meal = _classify_entire_meal(image_path)
+
     if not items:
         items = [
             {
@@ -211,6 +308,7 @@ def analyze_food_image(image_path: str) -> Dict[str, Any]:
         "success": True,
         "model": "roboflow-food-ingredients",
         "items": items,
+        "detectedMeal": detected_meal,
     }
 
 

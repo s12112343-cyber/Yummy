@@ -250,8 +250,11 @@ function findIngredientKey(name = '') {
 
   // alias match
   for (const key in ingredientMap) {
-    if (ingredientMap[key].some(alias => clean.includes(alias))) {
-      return key;
+    const aliases = ingredientMap[key];
+    if (Array.isArray(aliases)) {
+      if (aliases.some(alias => clean.includes(alias))) {
+        return key;
+      }
     }
   }
 

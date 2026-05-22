@@ -1,6 +1,8 @@
 const MealEntry = require("../models/MealEntry");
 const DailyWaterEntry = require("../models/DailyWaterEntry");
 const { analyzeQuickAddText } = require("../services/quickAddNutritionService");
+const { analyzeFoodImageWithAI } = require("../services/aiFoodVisionService");
+const fs = require("fs/promises");
 
 const allowedMealTypes = new Set(["breakfast", "lunch", "snack", "dinner"]);
 
@@ -509,11 +511,138 @@ const getPreviousMeals = async (req, res) => {
   }
 };
 
+const safeDeleteUploadedFile = async (filePath) => {
+  if (!filePath) {
+    return;
+  }
+
+  try {
+    await fs.unlink(filePath);
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      console.error("[AI Food Vision] Failed to delete uploaded file:", error.message);
+    }
+  }
+};
+
+const analyzePhotoAI = async (req, res) => {
+  const uploadedFile = req.file;
+
+  if (!uploadedFile) {
+    return res.status(400).json({
+      success: false,
+      message: "Image file is required",
+    });
+  }
+
+  try {
+    console.log('[AI Food Vision] Uploaded file info:', {
+      originalname: uploadedFile.originalname,
+      path: uploadedFile.path,
+      mimetype: uploadedFile.mimetype,
+      size: uploadedFile.size,
+    });
+
+    console.log('[AI Food Vision] image received');
+
+    const fileObj = {
+      path: uploadedFile.path,
+      mimetype: uploadedFile.mimetype,
+      size: uploadedFile.size,
+    };
+
+    const data = await analyzeFoodImageWithAI(fileObj);
+
+    console.log('[AI Food Vision] analyzeFoodImageWithAI result:', data);
+
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error("[AI Food Vision] analyzePhotoAI failed:", error.message);
+    if (error?.response) {
+      console.error("[AI Food Vision] analyzePhotoAI error response:", error.response);
+    }
+    // If Gemini returned a quota / billing error, surface it clearly to the client
+    const statusFromGemini = error?.response?.status || null;
+    const geminiCode = error?.code || null;
+
+    if (statusFromGemini === 429 || geminiCode === "insufficient_quota" || geminiCode === "RESOURCE_EXHAUSTED") {
+      return res.status(402).json({
+        success: false,
+        message:
+          "Gemini quota exceeded or billing issue: please check your Google AI Studio / Google Cloud billing settings.",
+        raw: error?.response || null,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to analyze meal photo",
+      raw: error?.response || null,
+    });
+  } finally {
+    await safeDeleteUploadedFile(uploadedFile.path);
+  }
+};
+
+// ============================================================================
+// FETCH INGREDIENTS FOR MEAL (for smart ingredient recognition)
+// ============================================================================
+
+const fetchIngredientsForMeal = async (req, res) => {
+  try {
+    const { mealName } = req.body;
+
+    if (
+      !mealName ||
+      typeof mealName !== "string" ||
+      mealName.trim().length === 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Meal name is required",
+        ingredients: [],
+      });
+    }
+
+    const { fetchIngredientsForMeal: getIngredients } =
+      require("../services/ingredientService");
+
+    const ingredients = await getIngredients(mealName.trim());
+
+    console.log(
+      `[Fetch Ingredients] Meal: ${mealName} | Found: ${ingredients.length} ingredients`
+    );
+
+    return res.status(200).json({
+      success: true,
+      mealName: mealName.trim(),
+      ingredients: ingredients || [],
+      message:
+        ingredients.length > 0
+          ? `Found ${ingredients.length} ingredients for ${mealName}`
+          : `No specific ingredients found for ${mealName}. Please use ingredient mode.`,
+    });
+  } catch (error) {
+    console.error("Error fetching ingredients:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch ingredients",
+      ingredients: [],
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   addMealsBatch,
   getDailySummary,
   getPeriodSummary,
   analyzeQuickAddMeal,
+  analyzePhotoAI,
   getPreviousMeals,
   updateDailyWater,
+  fetchIngredientsForMeal,
 };

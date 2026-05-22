@@ -347,8 +347,24 @@ def analyze_food_image(image_path: str) -> Dict[str, Any]:
     segmentation = segment_food_items(image_path, detection["detectedItems"])
     nutrition = predict_nutrition_from_items(image_path, segmentation["segmentedItems"])
 
+    # Calculate meal confidence from detected items
+    detected_items = detection.get("detectedItems", [])
+    meal_confidence = 0.0
+    if detected_items:
+        # Average confidence of all detected items
+        confidences = [
+            float(item.get("confidence", 0.5))
+            for item in detected_items
+            if "confidence" in item
+        ]
+        meal_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+    else:
+        # If no detection-level confidence, use 0.5 as default
+        meal_confidence = 0.5
+
     return {
         "mealName": build_meal_name(nutrition["items"]),
+        "mealConfidence": round(meal_confidence, 2),
         "items": nutrition["items"],
         "total": nutrition["total"],
         "note": "Estimated using YOLO food detection, FoodSAM/SAM segmentation, and EfficientNetB3 nutrition regression.",

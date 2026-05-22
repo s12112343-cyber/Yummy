@@ -738,6 +738,7 @@ class AddedNutrients {
   final double fat;
   final String? foodName;
   final double? gramsAdded;
+  final double? confidence;
 
   const AddedNutrients({
     required this.calories,
@@ -746,6 +747,7 @@ class AddedNutrients {
     required this.fat,
     this.foodName,
     this.gramsAdded,
+    this.confidence,
   });
 }
 

@@ -1,13 +1,11 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:math' as math;
 
-import '../../core/services/meal_service.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/services/meal_service.dart';
 import 'food_search_panel.dart';
 
 class PhotoAnalyzePanel extends StatefulWidget {
@@ -32,32 +30,27 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
   bool _isPhotoScanning = false;
   String? _errorText;
   Map<String, dynamic>? _analysisResult;
-  List<String> _detectedNames = [];
-  List<Map<String, dynamic>> _detectedItems = [];
   Size? _imageNaturalSize;
-  int _selectedIndex = -1;
   final TextEditingController _descCtrl = TextEditingController();
   final MealService _mealService = MealService();
+
+  bool _isFetchingIngredients = false;
+  String? _recognizedMealName;
+  List<String> _recognizedIngredients = [];
+  List<String> _possibleAllergens = [];
+  double? _mealConfidence;
 
   late final AnimationController _scanController;
   late final Animation<double> _scanAnimation;
 
-  // palette for detected item boxes
-  final List<Color> _boxColors = [
-    Colors.redAccent,
-    Colors.greenAccent,
-    Colors.blueAccent,
-    Colors.orangeAccent,
-    Colors.purpleAccent,
-    Colors.tealAccent,
-    Colors.pinkAccent,
-    Colors.amberAccent,
-  ];
-
   static const Color _navy = Color(0xFF061A40);
-  static const Color _pageBg = Color(0xFFF6F8FC);
-  static const Color _cardBorder = Color(0xFFE2EAF5);
-  static const Color _mutedText = Color(0xFF6B7A90);
+  static const Color _navy2 = Color(0xFF0B2A5B);
+  static const Color _navy3 = Color(0xFF123A7A);
+  static const Color _pageBg = Color(0xFFF8FAFD);
+  static const Color _cardBorder = Color(0xFFE7EEF8);
+  static const Color _mutedText = Color(0xFF66758A);
+  static const Color _softNavy = Color(0xFFF1F5FB);
+  static const Color _white = Colors.white;
 
   @override
   void initState() {
@@ -100,7 +93,6 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
         _isPhotoScanning = true;
       });
 
-      // get natural image size for mapping bboxes
       try {
         final bytes = await picked.readAsBytes();
         final codec = await ui.instantiateImageCodec(bytes);
@@ -121,11 +113,11 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
 
       _scanController.stop();
       _scanController.reset();
+
       setState(() {
         _isPhotoScanning = false;
       });
 
-      // automatically analyze after scan animation completes
       await _analyze();
     } catch (e) {
       setState(() {
@@ -155,7 +147,6 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
         _isPhotoScanning = true;
       });
 
-      // get natural image size for mapping bboxes
       try {
         final bytes = await picked.readAsBytes();
         final codec = await ui.instantiateImageCodec(bytes);
@@ -176,11 +167,11 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
 
       _scanController.stop();
       _scanController.reset();
+
       setState(() {
         _isPhotoScanning = false;
       });
 
-      // automatically analyze after scan animation completes
       await _analyze();
     } catch (e) {
       setState(() {
@@ -202,43 +193,157 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
 
     setState(() {
       _isLoading = true;
+      _isFetchingIngredients = true;
       _errorText = null;
       _analysisResult = null;
+      _recognizedMealName = null;
+      _recognizedIngredients = [];
+      _possibleAllergens = [];
+      _mealConfidence = null;
     });
 
     try {
-      final response = await _mealService.analyzeImageAI(
+      final response = await _mealService.analyzePhotoAI(
         imageFile: _imageFile!,
-        mealType: widget.mealType,
-        note: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
       );
 
       if (!mounted) return;
 
+      final mealName = _normalizeIngredientLabel(
+        response['mealName']?.toString() ?? '',
+      );
+
+      final ingredients = _normalizeStringList(response['ingredients']);
+      final allergens = _normalizeStringList(response['possibleAllergens']);
+
+      final mealConfidence = response['confidence'] is num
+          ? (response['confidence'] as num).toDouble()
+          : null;
+
       setState(() {
         _analysisResult = response;
-        // extract names from model predictions and show only those
-        final items = (response['items'] as List<dynamic>?) ?? <dynamic>[];
-        _detectedItems = items
-            .whereType<Map<String, dynamic>>()
-            .map((m) => Map<String, dynamic>.from(m))
-            .toList();
-        _detectedNames = _detectedItems
-            .map(
-              (m) => (m['name'] ?? m['class'] ?? m['label'] ?? '').toString(),
-            )
-            .where((s) => s.trim().isNotEmpty)
-            .toList();
+        _recognizedMealName = mealName.isEmpty ? 'unknown' : mealName;
+        _recognizedIngredients = ingredients;
+        _possibleAllergens = allergens;
+        _mealConfidence = mealConfidence;
         _isLoading = false;
+        _isFetchingIngredients = false;
       });
     } catch (error) {
       if (!mounted) return;
 
       setState(() {
         _isLoading = false;
+        _isFetchingIngredients = false;
         _errorText = error.toString().replaceFirst('Exception: ', '');
       });
     }
+  }
+
+  void _handlePhotoIngredientsConfirmed() {
+    double toDouble(dynamic v) {
+      if (v == null) return 0.0;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString()) ?? 0.0;
+    }
+
+    final calories = toDouble(_analysisResult?['calories']);
+    final protein = toDouble(_analysisResult?['protein']);
+    final fat = toDouble(_analysisResult?['fat']);
+    final carbs = toDouble(_analysisResult?['carbs']);
+    final estimatedWeightGrams = toDouble(
+      _analysisResult?['estimatedWeightGrams'],
+    );
+
+    final fallbackMealName = _analysisResult?['mealName']?.toString().trim();
+
+    final mealName = (_recognizedMealName?.trim().isNotEmpty == true)
+        ? _recognizedMealName!.trim()
+        : fallbackMealName;
+
+    widget.onNutrientsAdded(
+      AddedNutrients(
+        calories: calories,
+        protein: protein,
+        carbs: carbs,
+        fat: fat,
+        foodName: mealName,
+        gramsAdded: estimatedWeightGrams > 0 ? estimatedWeightGrams : null,
+        confidence: _mealConfidence,
+      ),
+    );
+
+    _resetPhoto();
+  }
+
+  List<String> _normalizeStringList(dynamic value) {
+    if (value is! List) {
+      return <String>[];
+    }
+
+    final seen = <String>{};
+    final results = <String>[];
+
+    for (final item in value) {
+      final cleaned = _normalizeIngredientLabel(item?.toString() ?? '');
+
+      if (cleaned.isEmpty) continue;
+
+      final key = cleaned.toLowerCase();
+
+      if (seen.add(key)) {
+        results.add(cleaned);
+      }
+    }
+
+    return results;
+  }
+
+  String _normalizeIngredientLabel(String value) {
+    var text = value.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+    if (text.isEmpty) {
+      return '';
+    }
+
+    text = text.replaceFirst(RegExp(r'^[\d\s./-]+'), '');
+
+    text = text.replaceFirst(
+      RegExp(
+        r'^(?:about|around|approximately|approx\.?|roughly)\s+',
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    text = text.replaceFirst(
+      RegExp(
+        r'^(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten)\s+',
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    text = text.replaceFirst(
+      RegExp(
+        r'^(?:cups?|cupfuls?|tablespoons?|tbsp|teaspoons?|tsp|grams?|gram|g|kilograms?|kg|milliliters?|millilitres?|ml|liters?|litres?|ounces?|oz|pounds?|lb|pieces?|slices?|cloves?|cans?|packages?|packs?|pinches?|handfuls?)\b\s*',
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    text = text.replaceAll(
+      RegExp(
+        r'\b(?:fresh|chopped|diced|minced|sliced|grilled|fried|baked|roasted|cooked|raw)\b',
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    text = text.replaceAll(RegExp(r'[,.;:!?]+$'), '');
+    text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    return text;
   }
 
   void _resetPhoto() {
@@ -252,151 +357,12 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
       _analysisResult = null;
       _isPhotoScanning = false;
       _isLoading = false;
-      _detectedItems = [];
-      _detectedNames = [];
       _imageNaturalSize = null;
-    });
-  }
-
-  void _openPreview(int index) {
-    if (index < 0 || index >= _detectedItems.length) return;
-    final item = _detectedItems[index];
-    final name = (item['name'] ?? item['class'] ?? item['label'] ?? '')
-        .toString();
-
-    // show only the image preview when tapping a bbox (no add controls here)
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return Dialog(
-          insetPadding: const EdgeInsets.all(12),
-          child: SizedBox(
-            width: double.infinity,
-            height: math.min(MediaQuery.of(context).size.height * 0.85, 700),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _navy,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(8),
-                      topRight: Radius.circular(8),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          name.isEmpty ? 'Detected item' : name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.of(ctx).pop(),
-                        child: const Text(
-                          'Close',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Center(
-                    child: InteractiveViewer(child: Image.file(_imageFile!)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _addDetectedItem(int index) {
-    // support when items are coming from _analysisResult (initial render)
-    final sourceItems = _detectedItems.isNotEmpty
-        ? _detectedItems
-        : ((_analysisResult?['items'] as List<dynamic>?)
-                  ?.whereType<Map<String, dynamic>>()
-                  .map((m) => Map<String, dynamic>.from(m))
-                  .toList() ??
-              <Map<String, dynamic>>[]);
-
-    if (index < 0 || index >= sourceItems.length) return;
-    final item = sourceItems[index];
-    final name = (item['name'] ?? item['class'] ?? item['label'] ?? '')
-        .toString();
-
-    // Currently no nutrient estimates from model — add as zero-valued entry
-    widget.onNutrientsAdded(
-      AddedNutrients(
-        calories: 0,
-        protein: 0,
-        carbs: 0,
-        fat: 0,
-        foodName: name.isEmpty ? null : name,
-        gramsAdded: null,
-      ),
-    );
-
-    // update detected lists in state so UI reflects removal
-    setState(() {
-      if (_detectedItems.isEmpty) {
-        // create a mutable copy from analysis and remove the selected
-        _detectedItems = sourceItems.toList();
-      }
-      if (index >= 0 && index < _detectedItems.length) {
-        _detectedItems.removeAt(index);
-      }
-      _detectedNames = _detectedItems
-          .map((m) => (m['name'] ?? m['class'] ?? m['label'] ?? '').toString())
-          .where((s) => s.trim().isNotEmpty)
-          .toList();
-    });
-  }
-
-  void _addAllDetectedItems() {
-    final sourceItems = _detectedItems.isNotEmpty
-        ? _detectedItems
-        : ((_analysisResult?['items'] as List<dynamic>?)
-                  ?.whereType<Map<String, dynamic>>()
-                  .map((m) => Map<String, dynamic>.from(m))
-                  .toList() ??
-              <Map<String, dynamic>>[]);
-
-    if (sourceItems.isEmpty) return;
-
-    for (final item in sourceItems) {
-      final name = (item['name'] ?? item['class'] ?? item['label'] ?? '')
-          .toString();
-      widget.onNutrientsAdded(
-        AddedNutrients(
-          calories: 0,
-          protein: 0,
-          carbs: 0,
-          fat: 0,
-          foodName: name.isEmpty ? null : name,
-          gramsAdded: null,
-        ),
-      );
-    }
-
-    // clear detected items from UI after adding
-    setState(() {
-      _detectedItems = [];
-      _detectedNames = [];
-      _analysisResult = null;
+      _recognizedMealName = null;
+      _recognizedIngredients = [];
+      _possibleAllergens = [];
+      _mealConfidence = null;
+      _isFetchingIngredients = false;
     });
   }
 
@@ -405,9 +371,9 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
     return Container(
       decoration: BoxDecoration(
         color: _pageBg,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(28),
       ),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 250),
         switchInCurve: Curves.easeOutCubic,
@@ -420,7 +386,7 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
   Widget _buildEmptyState() {
     return Container(
       key: const ValueKey('empty-photo-state'),
-      padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
       decoration: _cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -428,15 +394,18 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
           _buildHeaderBadge(),
           const SizedBox(height: 18),
           Container(
-            height: 210,
+            height: 220,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFFFFFF), Color(0xFFF0F5FF)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              borderRadius: BorderRadius.circular(26),
+              color: _white,
               border: Border.all(color: _cardBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: _navy.withOpacity(0.06),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
+                ),
+              ],
             ),
             child: Stack(
               children: [
@@ -455,15 +424,19 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        width: 92,
-                        height: 92,
+                        width: 88,
+                        height: 88,
                         decoration: BoxDecoration(
-                          color: _navy,
-                          borderRadius: BorderRadius.circular(28),
+                          gradient: const LinearGradient(
+                            colors: [_navy, _navy2],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(26),
                           boxShadow: [
                             BoxShadow(
-                              color: _navy.withOpacity(0.22),
-                              blurRadius: 26,
+                              color: _navy.withOpacity(0.18),
+                              blurRadius: 24,
                               offset: const Offset(0, 12),
                             ),
                           ],
@@ -471,7 +444,7 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
                         child: const Icon(
                           Icons.photo_camera_rounded,
                           color: Colors.white,
-                          size: 42,
+                          size: 40,
                         ),
                       ),
                       const SizedBox(height: 18),
@@ -489,7 +462,7 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 22),
                         child: Text(
-                          'Take a clear plate photo and let the AI detect items, estimate quantities, and calculate nutrition.',
+                          'Take a clear plate photo and let AI detect ingredients, allergens, and nutrition.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: _mutedText,
@@ -517,11 +490,12 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
             child: OutlinedButton.icon(
               onPressed: _openGallery,
               style: OutlinedButton.styleFrom(
-                side: BorderSide(color: _navy.withOpacity(0.12)),
-                backgroundColor: const Color(0xFFF8FAFD),
+                side: BorderSide(color: _navy.withOpacity(0.14)),
+                backgroundColor: _white,
                 foregroundColor: _navy,
+                elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(16),
                 ),
               ),
               icon: const Icon(Icons.photo_library_outlined),
@@ -556,7 +530,7 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: _navy.withOpacity(0.08),
+                  color: _softNavy,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
@@ -573,7 +547,11 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _isPhotoScanning ? 'Scanning photo...' : 'Photo Analysis',
+                      _isPhotoScanning
+                          ? 'Scanning photo...'
+                          : _isFetchingIngredients
+                          ? 'Analyzing ingredients...'
+                          : 'Photo Analysis',
                       style: const TextStyle(
                         color: _navy,
                         fontSize: 18,
@@ -582,22 +560,28 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
                       ),
                     ),
                     const SizedBox(height: 2),
-                    if (_isPhotoScanning)
-                      const Text(
-                        'Detecting meal areas from your photo',
-                        style: TextStyle(
-                          color: _mutedText,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    Text(
+                      _isPhotoScanning
+                          ? 'Detecting meal areas from your photo'
+                          : _isFetchingIngredients
+                          ? 'Preparing meal result and nutrition'
+                          : 'Review the result before adding it',
+                      style: const TextStyle(
+                        color: _mutedText,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
                       ),
+                    ),
                   ],
                 ),
               ),
               IconButton(
-                onPressed: _isLoading || _isPhotoScanning ? null : _resetPhoto,
+                onPressed:
+                    (_isLoading || _isPhotoScanning || _isFetchingIngredients)
+                    ? null
+                    : _resetPhoto,
                 style: IconButton.styleFrom(
-                  backgroundColor: const Color(0xFFF2F5FA),
+                  backgroundColor: _softNavy,
                   foregroundColor: _navy,
                 ),
                 icon: const Icon(Icons.close_rounded),
@@ -609,7 +593,7 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
           const SizedBox(height: 16),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
-            child: _isPhotoScanning
+            child: _isPhotoScanning || _isFetchingIngredients
                 ? _buildScanningStatus()
                 : _buildReadyForm(),
           ),
@@ -617,39 +601,10 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
             const SizedBox(height: 14),
             _errorBox(_errorText!),
           ],
-          if (_analysisResult != null) ...[
+          if (_analysisResult != null && !_isFetchingIngredients) ...[
             const SizedBox(height: 14),
             _buildAnalysisResultSection(_analysisResult!),
           ],
-          // bottom Add button (moved here from Detected header)
-          if ((_detectedItems.isNotEmpty) ||
-              (((_analysisResult?['items'] as List<dynamic>?)?.isNotEmpty) ??
-                  false))
-            const SizedBox(height: 12),
-          if ((_detectedItems.isNotEmpty) ||
-              (((_analysisResult?['items'] as List<dynamic>?)?.isNotEmpty) ??
-                  false))
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: _addAllDetectedItems,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.deepBlue,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'Add to my meal',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -661,316 +616,177 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
         Container(
           height: 245,
           decoration: BoxDecoration(
+            color: _white,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(color: _cardBorder),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 22,
+                color: _navy.withOpacity(0.08),
+                blurRadius: 24,
                 offset: const Offset(0, 12),
               ),
             ],
           ),
           clipBehavior: Clip.hardEdge,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final displayW = constraints.maxWidth;
-              final displayH = 245.0;
-
-              final natural = _imageNaturalSize;
-              double renderW = displayW;
-              double renderH = displayH;
-              double dx = 0, dy = 0;
-
-              if (natural != null && natural.width > 0 && natural.height > 0) {
-                final scale = math.min(
-                  displayW / natural.width,
-                  displayH / natural.height,
-                );
-                renderW = natural.width * scale;
-                renderH = natural.height * scale;
-                dx = (displayW - renderW) / 2.0;
-                dy = (displayH - renderH) / 2.0;
-              }
-
-              // prepare entries list for rendering detected boxes
-              var entries = <MapEntry<int, dynamic>>[];
-              if (_detectedItems.isNotEmpty && _imageNaturalSize != null) {
-                final all = _detectedItems.asMap().entries.toList();
-                entries = (_selectedIndex != -1 && _selectedIndex < all.length)
-                    ? [all[_selectedIndex]]
-                    : all;
-              }
-
-              return Stack(
-                children: [
-                  Positioned.fill(
-                    child: FittedBox(
-                      fit: BoxFit.contain,
-                      alignment: Alignment.center,
-                      child: SizedBox(
-                        width: _imageNaturalSize?.width ?? displayW,
-                        height: _imageNaturalSize?.height ?? displayH,
-                        child: Image.file(_imageFile!, fit: BoxFit.fill),
-                      ),
-                    ),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: FittedBox(
+                  fit: BoxFit.contain,
+                  alignment: Alignment.center,
+                  child: SizedBox(
+                    width: _imageNaturalSize?.width ?? 1,
+                    height: _imageNaturalSize?.height ?? 1,
+                    child: Image.file(_imageFile!, fit: BoxFit.cover),
                   ),
-                  // tap outside boxes to clear selection
-                  Positioned.fill(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onTap: () {
-                        if (_selectedIndex != -1) {
-                          setState(() {
-                            _selectedIndex = -1;
-                          });
-                        }
-                      },
-                      child: const SizedBox.shrink(),
-                    ),
-                  ),
-                  // draw detected bounding boxes if available
-                  if (entries.isNotEmpty)
-                    ...entries.expand((e) sync* {
-                      final idx = e.key;
-                      final item = e.value;
-                      final bboxRaw = (item['bbox'] as List<dynamic>?) ?? [];
-                      if (bboxRaw.length < 4) return;
-                      double x1 = (bboxRaw[0] as num).toDouble();
-                      double y1 = (bboxRaw[1] as num).toDouble();
-                      double x2 = (bboxRaw[2] as num).toDouble();
-                      double y2 = (bboxRaw[3] as num).toDouble();
-
-                      final naturalW = _imageNaturalSize!.width;
-                      final naturalH = _imageNaturalSize!.height;
-
-                      // handle normalized coords (0..1) or absolute
-                      if (x1 <= 1 && y1 <= 1 && x2 <= 1 && y2 <= 1) {
-                        x1 *= naturalW;
-                        x2 *= naturalW;
-                        y1 *= naturalH;
-                        y2 *= naturalH;
-                      }
-
-                      final scale = math.min(
-                        displayW / naturalW,
-                        displayH / naturalH,
-                      );
-                      final left = dx + x1 * scale;
-                      final top = dy + y1 * scale;
-                      final w = (x2 - x1) * scale;
-                      final h = (y2 - y1) * scale;
-                      final boxColor = _boxColors[idx % _boxColors.length]
-                          .withOpacity(0.95);
-                      final bgColor = boxColor.withOpacity(0.12);
-
-                      // label position: try to place above the box, but keep inside bounds
-                      const labelHeight = 22.0;
-                      final labelTop = (top - labelHeight - 6).clamp(
-                        0.0,
-                        displayH,
-                      );
-
-                      // yield the box then the label (label painted above)
-                      yield Positioned(
-                        left: left.clamp(0, displayW),
-                        top: top.clamp(0, displayH),
-                        width: w.clamp(8, displayW),
-                        height: h.clamp(8, displayH),
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _selectedIndex = idx;
-                            });
-                          },
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: boxColor, width: 2),
-                              color: bgColor,
-                            ),
-                          ),
-                        ),
-                      );
-
-                      final name =
-                          (item['name'] ?? item['class'] ?? item['label'] ?? '')
-                              .toString();
-
-                      // if a box is selected, ensure label still shows above it
-                      yield Positioned(
-                        left: left.clamp(0, displayW),
-                        top: labelTop,
-                        width: math.min(w.clamp(8, displayW), displayW - left),
-                        height: labelHeight,
-                        child: IgnorePointer(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: boxColor,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                name.isEmpty ? 'Item' : name,
-                                style: const TextStyle(
+                ),
+              ),
+              if (_isPhotoScanning)
+                Positioned.fill(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: AnimatedBuilder(
+                      animation: _scanAnimation,
+                      builder: (context, child) {
+                        return Stack(
+                          children: [
+                            Container(color: _navy.withOpacity(0.16)),
+                            Positioned(
+                              top: 245 * _scanAnimation.value,
+                              left: 0,
+                              right: 0,
+                              child: Container(
+                                height: 4,
+                                decoration: BoxDecoration(
                                   color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.white.withOpacity(0.9),
+                                      blurRadius: 18,
+                                      spreadRadius: 4,
+                                    ),
+                                  ],
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            Positioned.fill(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.85),
+                                    width: 1.3,
+                                  ),
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                              ),
+                            ),
+                            Positioned(left: 18, top: 18, child: _scanCorner()),
+                            Positioned(
+                              right: 18,
+                              top: 18,
+                              child: Transform.rotate(
+                                angle: 1.5708,
+                                child: _scanCorner(),
+                              ),
+                            ),
+                            Positioned(
+                              right: 18,
+                              bottom: 18,
+                              child: Transform.rotate(
+                                angle: 3.1416,
+                                child: _scanCorner(),
+                              ),
+                            ),
+                            Positioned(
+                              left: 18,
+                              bottom: 18,
+                              child: Transform.rotate(
+                                angle: -1.5708,
+                                child: _scanCorner(),
+                              ),
+                            ),
+                            Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.94),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: Colors.white),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              _navy,
+                                            ),
+                                      ),
+                                    ),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      'AI scanning...',
+                                      style: TextStyle(
+                                        color: _navy,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              if (!_isPhotoScanning)
+                Positioned(
+                  left: 12,
+                  top: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.94),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: Colors.white),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.check_circle_rounded,
+                          color: _navy,
+                          size: 16,
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          'Photo ready',
+                          style: TextStyle(
+                            color: _navy,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                      );
-                    }).toList(),
-                ],
-              );
-            },
+                      ],
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
-        if (_isPhotoScanning && _selectedIndex == -1)
-          Positioned.fill(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: AnimatedBuilder(
-                animation: _scanAnimation,
-                builder: (context, child) {
-                  return Stack(
-                    children: [
-                      Container(color: _navy.withOpacity(0.18)),
-                      Positioned(
-                        top: 245 * _scanAnimation.value,
-                        left: 0,
-                        right: 0,
-                        child: Container(
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.white.withOpacity(0.9),
-                                blurRadius: 18,
-                                spreadRadius: 4,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Positioned.fill(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.85),
-                              width: 1.3,
-                            ),
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                        ),
-                      ),
-                      Positioned(left: 18, top: 18, child: _scanCorner()),
-                      Positioned(
-                        right: 18,
-                        top: 18,
-                        child: Transform.rotate(
-                          angle: 1.5708,
-                          child: _scanCorner(),
-                        ),
-                      ),
-                      Positioned(
-                        right: 18,
-                        bottom: 18,
-                        child: Transform.rotate(
-                          angle: 3.1416,
-                          child: _scanCorner(),
-                        ),
-                      ),
-                      Positioned(
-                        left: 18,
-                        bottom: 18,
-                        child: Transform.rotate(
-                          angle: -1.5708,
-                          child: _scanCorner(),
-                        ),
-                      ),
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.94),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: Colors.white),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    _navy,
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: 10),
-                              Text(
-                                'AI scanning...',
-                                style: TextStyle(
-                                  color: _navy,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ),
-        if (!_isPhotoScanning && _selectedIndex == -1)
-          Positioned(
-            left: 12,
-            top: 12,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.94),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: Colors.white),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.check_circle_rounded, color: _navy, size: 16),
-                  SizedBox(width: 6),
-                  Text(
-                    'Photo ready',
-                    style: TextStyle(
-                      color: _navy,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
       ],
     );
   }
@@ -980,18 +796,20 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
       key: const ValueKey('scanning-status'),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFD),
+        color: _white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: _cardBorder),
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(Icons.auto_awesome_rounded, color: _navy, size: 22),
-          SizedBox(width: 10),
+          const Icon(Icons.auto_awesome_rounded, color: _navy, size: 22),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Please wait while we prepare your photo for analysis...',
-              style: TextStyle(
+              _isFetchingIngredients
+                  ? 'Analyzing the photo and organizing your meal result...'
+                  : 'Please wait while we prepare your photo for analysis...',
+              style: const TextStyle(
                 color: _mutedText,
                 fontSize: 13,
                 height: 1.35,
@@ -1033,6 +851,751 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
     );
   }
 
+  Widget _buildAnalysisResultSection(Map<String, dynamic> analysis) {
+    final mealName =
+        (_recognizedMealName ?? analysis['mealName']?.toString() ?? '').trim();
+
+    final ingredients = _recognizedIngredients.isNotEmpty
+        ? _recognizedIngredients
+        : _normalizeStringList(analysis['ingredients']);
+
+    final allergens = _possibleAllergens.isNotEmpty
+        ? _possibleAllergens
+        : _normalizeStringList(analysis['possibleAllergens']);
+
+    final confidence =
+        _mealConfidence ??
+        (analysis['confidence'] is num
+            ? (analysis['confidence'] as num).toDouble()
+            : null);
+
+    final calories = _toNumOrNull(analysis['calories']);
+    final protein = _toNumOrNull(analysis['protein']);
+    final carbs = _toNumOrNull(analysis['carbs']);
+    final fat = _toNumOrNull(analysis['fat']);
+    final weight = _toNumOrNull(analysis['estimatedWeightGrams']);
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 650),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 24 * (1 - value)),
+            child: child,
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _pageBg,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: _cardBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _premiumSectionHeader(),
+            const SizedBox(height: 14),
+            _premiumMealCard(
+              mealName: mealName.isEmpty ? 'Unknown meal' : mealName,
+              confidence: confidence,
+            ),
+            const SizedBox(height: 14),
+            _premiumCaloriesCard(calories),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _animatedMacroTile(
+                    delay: 80,
+                    icon: Icons.fitness_center_rounded,
+                    label: 'Protein',
+                    value: '${_formatNutritionValue(protein, digits: 1)}g',
+                    accentColor: AppColors.proteinBlue,
+                    accentBackground: AppColors.proteinBg,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _animatedMacroTile(
+                    delay: 140,
+                    icon: Icons.grain_rounded,
+                    label: 'Carbs',
+                    value: '${_formatNutritionValue(carbs, digits: 1)}g',
+                    accentColor: AppColors.carbsGreen,
+                    accentBackground: AppColors.carbsBg,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _animatedMacroTile(
+                    delay: 200,
+                    icon: Icons.water_drop_rounded,
+                    label: 'Fat',
+                    value: '${_formatNutritionValue(fat, digits: 1)}g',
+                    accentColor: AppColors.fatOrange,
+                    accentBackground: AppColors.fatBg,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _animatedMacroTile(
+                    delay: 260,
+                    icon: Icons.scale_rounded,
+                    label: 'Weight',
+                    value: '${_formatNutritionValue(weight)}g',
+                    accentColor: AppColors.royalBlue,
+                    accentBackground: AppColors.babyBlue,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _premiumInfoCard(
+              title: 'Detected Ingredients',
+              subtitle: '${ingredients.length} items found',
+              icon: Icons.eco_rounded,
+              child: ingredients.isEmpty
+                  ? _premiumEmptyMessage(
+                      icon: Icons.info_outline_rounded,
+                      text: 'No ingredients detected.',
+                    )
+                  : Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: List.generate(
+                        ingredients.length,
+                        (index) => _staggeredChip(
+                          index: index,
+                          child: _premiumIngredientChip(ingredients[index]),
+                        ),
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 12),
+            _premiumInfoCard(
+              title: 'Possible Allergens',
+              subtitle: allergens.isEmpty
+                  ? 'No warning detected'
+                  : '${allergens.length} warning items',
+              icon: Icons.health_and_safety_rounded,
+              child: allergens.isEmpty
+                  ? _safeAllergenMessage()
+                  : Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: List.generate(
+                        allergens.length,
+                        (index) => _staggeredChip(
+                          index: index,
+                          child: _premiumAllergenChip(allergens[index]),
+                        ),
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton.icon(
+                onPressed: ingredients.isEmpty
+                    ? null
+                    : _handlePhotoIngredientsConfirmed,
+                icon: const Icon(Icons.check_circle_rounded, size: 18),
+                label: const Text('Confirm'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _navy,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: _navy.withOpacity(0.45),
+                  elevation: 0,
+                  minimumSize: const Size.fromHeight(56),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  num? _toNumOrNull(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value;
+    return num.tryParse(value.toString());
+  }
+
+  String _formatNutritionValue(num? value, {int digits = 0}) {
+    if (value == null || value <= 0) return '--';
+    return value.toStringAsFixed(digits);
+  }
+
+  Widget _premiumSectionHeader() {
+    return Row(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [_navy, _navy2],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: _navy.withOpacity(0.18),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.auto_awesome_rounded,
+            color: Colors.white,
+            size: 23,
+          ),
+        ),
+        const SizedBox(width: 12),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'AI Meal Result',
+                style: TextStyle(
+                  color: _navy,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              SizedBox(height: 2),
+              Text(
+                'Smart analysis summary',
+                style: TextStyle(
+                  color: _mutedText,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _premiumMealCard({
+    required String mealName,
+    required double? confidence,
+  }) {
+    final safeConfidence = confidence == null
+        ? null
+        : confidence.clamp(0.0, 1.0).toDouble();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [_navy, _navy2, _navy3],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [
+          BoxShadow(
+            color: _navy.withOpacity(0.22),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -26,
+            top: -28,
+            child: Container(
+              width: 110,
+              height: 110,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.07),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 28,
+            bottom: -42,
+            child: Container(
+              width: 90,
+              height: 90,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.05),
+              ),
+            ),
+          ),
+          Row(
+            children: [
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.13),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withOpacity(0.16)),
+                ),
+                child: const Icon(
+                  Icons.restaurant_rounded,
+                  color: Colors.white,
+                  size: 30,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Detected Meal',
+                      style: TextStyle(
+                        color: Color(0xFFD6E4FF),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      mealName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        height: 1.12,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (safeConfidence != null) ...[
+                const SizedBox(width: 10),
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: safeConfidence),
+                  duration: const Duration(milliseconds: 900),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, child) {
+                    return SizedBox(
+                      width: 58,
+                      height: 58,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CircularProgressIndicator(
+                            value: value,
+                            strokeWidth: 5,
+                            backgroundColor: Colors.white.withOpacity(0.16),
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                          Text(
+                            '${(value * 100).toStringAsFixed(0)}%',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _premiumCaloriesCard(num? calories) {
+    final endValue = calories == null ? 0.0 : calories.toDouble();
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: endValue),
+      duration: const Duration(milliseconds: 900),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: _cardBorder),
+            boxShadow: [
+              BoxShadow(
+                color: _navy.withOpacity(0.05),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: _softNavy,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(
+                  Icons.local_fire_department_rounded,
+                  color: _navy,
+                  size: 30,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Estimated Calories',
+                      style: TextStyle(
+                        color: _mutedText,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      calories == null || calories <= 0
+                          ? '-- kcal'
+                          : '${value.toStringAsFixed(0)} kcal',
+                      style: const TextStyle(
+                        color: _navy,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.8,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: _softNavy,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
+                  'AI',
+                  style: TextStyle(
+                    color: _navy,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _animatedMacroTile({
+    required int delay,
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color accentColor,
+    required Color accentBackground,
+  }) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 520 + delay),
+      curve: Curves.easeOutBack,
+      builder: (context, progress, child) {
+        return Opacity(
+          opacity: progress.clamp(0.0, 1.0),
+          child: Transform.scale(scale: 0.92 + (0.08 * progress), child: child),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          color: _white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: _cardBorder),
+          boxShadow: [
+            BoxShadow(
+              color: _navy.withOpacity(0.035),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: accentBackground,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(icon, color: accentColor, size: 18),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              style: const TextStyle(
+                color: _mutedText,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              value,
+              style: TextStyle(
+                color: accentColor,
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _premiumInfoCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Widget child,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: _white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _cardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: _navy.withOpacity(0.035),
+            blurRadius: 18,
+            offset: const Offset(0, 9),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: _softNavy,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: _navy, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: _navy,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: _mutedText,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 13),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _staggeredChip({required int index, required Widget child}) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 420 + (index * 70)),
+      curve: Curves.easeOutBack,
+      builder: (context, value, _) {
+        return Opacity(
+          opacity: value.clamp(0.0, 1.0),
+          child: Transform.translate(
+            offset: Offset(0, 12 * (1 - value)),
+            child: Transform.scale(scale: 0.9 + (0.1 * value), child: child),
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+
+  Widget _premiumIngredientChip(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: _softNavy,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: _cardBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.check_circle_rounded, color: _navy, size: 16),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: const TextStyle(
+              color: _navy,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _premiumAllergenChip(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF1F2),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFFECACA)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.warning_amber_rounded,
+            color: Color(0xFFB91C1C),
+            size: 16,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: const TextStyle(
+              color: Color(0xFFB91C1C),
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _safeAllergenMessage() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.verified_rounded, color: Color(0xFF15803D), size: 20),
+          SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              'No likely allergens detected.',
+              style: TextStyle(
+                color: Color(0xFF15803D),
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _premiumEmptyMessage({required IconData icon, required String text}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: _pageBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _cardBorder),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: _mutedText, size: 19),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: _mutedText,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _scanCorner() {
     return SizedBox(
       width: 34,
@@ -1045,9 +1608,9 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
     return Row(
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: _navy.withOpacity(0.07),
+            color: _softNavy,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: _navy.withOpacity(0.08)),
           ),
@@ -1071,16 +1634,16 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
           decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFD),
+            color: _white,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: _cardBorder),
           ),
           child: const Text(
             'Beta',
             style: TextStyle(
-              color: _mutedText,
+              color: _navy,
               fontSize: 11,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w900,
             ),
           ),
         ),
@@ -1092,7 +1655,7 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFD),
+        color: _white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: _cardBorder),
       ),
@@ -1116,109 +1679,6 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
     );
   }
 
-  Widget _macroChip(String label, String value, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Text(
-        '$label $value',
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAnalysisResultSection(Map<String, dynamic> analysis) {
-    // prefer cached detected items from analysis; fall back to raw analysis data
-    final items = _detectedItems.isNotEmpty
-        ? _detectedItems
-        : (analysis['items'] as List<dynamic>?)
-                  ?.whereType<Map<String, dynamic>>()
-                  .map((m) => Map<String, dynamic>.from(m))
-                  .toList() ??
-              <Map<String, dynamic>>[];
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFD),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _cardBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Detected',
-                style: TextStyle(
-                  color: _navy,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              // Add button moved to bottom of the panel per UX
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (items.isEmpty) ...[
-            Text(
-              'No items detected.',
-              style: TextStyle(color: _mutedText, fontWeight: FontWeight.w700),
-            ),
-          ] else ...[
-            Column(
-              children: items.take(8).toList().asMap().entries.map((e) {
-                final idx = e.key;
-                final item = e.value;
-                final name =
-                    (item['name'] ?? item['class'] ?? item['label'] ?? '')
-                        .toString();
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _cardBorder),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          name.isEmpty ? 'Detected item' : name,
-                          style: const TextStyle(
-                            color: _navy,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // per-item buttons removed — use Add All above
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
   Widget _primaryButton({
     required String label,
     required IconData icon,
@@ -1237,9 +1697,9 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
           padding: const EdgeInsets.symmetric(horizontal: 14),
           minimumSize: const Size(0, 52),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
           ),
-          shadowColor: _navy.withOpacity(0.3),
+          shadowColor: _navy.withOpacity(0.24),
         ),
         child: isLoading
             ? const Row(
@@ -1289,11 +1749,11 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
         style: OutlinedButton.styleFrom(
           foregroundColor: _navy,
           side: BorderSide(color: _navy.withOpacity(0.12)),
-          backgroundColor: const Color(0xFFF2F7FB),
+          backgroundColor: _white,
           padding: EdgeInsets.zero,
           minimumSize: const Size(52, 52),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
         child: Icon(icon, size: 22),
@@ -1336,13 +1796,13 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
 
   BoxDecoration _cardDecoration() {
     return BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(26),
+      color: _white,
+      borderRadius: BorderRadius.circular(28),
       border: Border.all(color: _cardBorder),
       boxShadow: [
         BoxShadow(
-          color: _navy.withOpacity(0.07),
-          blurRadius: 28,
+          color: _navy.withOpacity(0.06),
+          blurRadius: 30,
           offset: const Offset(0, 14),
         ),
       ],

@@ -7,7 +7,7 @@ This folder contains the staged image analysis flow used by the meal photo featu
 1. `predict_food_items.py` - YOLOv8 food detection.
 2. `segment_food.py` - FoodSAM / SAM segmentation and quantity estimation.
 3. `predict_nutrition.py` - EfficientNetB3 nutrition regression.
-4. `analyze_food_image.py` - Orchestrates the full pipeline and returns the final JSON.
+4. `analyze_food_image.py` - Orchestrates the full pipeline, classifies the whole meal with `onnx-community/swin-finetuned-food101-ONNX`, and returns the final JSON.
 
 ## Current mode
 
@@ -18,6 +18,8 @@ The runtime now expects real model files. If a required model is missing, it ret
 - `models/food_yolo.pt` for food detection.
 - `models/nutrition_model.keras` for nutrition regression.
 - `models/foodsam/` or a SAM checkpoint file for segmentation.
+
+Meal classification uses the Hugging Face ONNX model `onnx-community/swin-finetuned-food101-ONNX` by default. Set `FOOD_MEAL_MODEL_ID` if you want to override it, and adjust `DETECTED_MEAL_THRESHOLD` to control when the UI shows the detected meal card.
 
 ## Run locally
 
