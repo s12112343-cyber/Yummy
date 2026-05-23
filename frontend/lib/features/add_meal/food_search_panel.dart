@@ -739,6 +739,9 @@ class AddedNutrients {
   final String? foodName;
   final double? gramsAdded;
   final double? confidence;
+  final List<String> ingredients;
+  final List<String> possibleAllergens;
+  final bool restrictionsChecked;
 
   const AddedNutrients({
     required this.calories,
@@ -748,6 +751,9 @@ class AddedNutrients {
     this.foodName,
     this.gramsAdded,
     this.confidence,
+    this.ingredients = const [],
+    this.possibleAllergens = const [],
+    this.restrictionsChecked = false,
   });
 }
 
@@ -1398,6 +1404,16 @@ class _FoodSearchPanelState extends State<FoodSearchPanel> {
     final addedProtein = _per100gValue(item, item.protein);
     final addedCarbs = _per100gValue(item, item.carbs);
     final addedFat = _per100gValue(item, item.fat);
+    final ingredientNames = <String>{
+      if (item.ingredients != null)
+        ...item.ingredients!
+            .split(',')
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty),
+      ...item.ingredientItems
+          .map((value) => value.name)
+          .where((value) => value.trim().isNotEmpty),
+    }.toList(growable: false);
 
     widget.onCaloriesAdded?.call(addedCalories);
     widget.onNutrientsAdded?.call(
@@ -1408,6 +1424,7 @@ class _FoodSearchPanelState extends State<FoodSearchPanel> {
         fat: addedFat,
         foodName: item.name,
         gramsAdded: gramsToAdd,
+        ingredients: ingredientNames,
       ),
     );
   }

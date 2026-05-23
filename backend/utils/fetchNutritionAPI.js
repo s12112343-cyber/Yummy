@@ -1,7 +1,8 @@
 const axios = require('axios');
 
-const APP_ID = process.env.EDAMAM_ID;
-const APP_KEY = process.env.EDAMAM_KEY;
+// Support both legacy and new env var names
+const APP_ID = process.env.EDAMAM_ID || process.env.EDAMAM_APP_ID || process.env.EDAMAM_APPID;
+const APP_KEY = process.env.EDAMAM_KEY || process.env.EDAMAM_APP_KEY || process.env.EDAMAM_APPKEY;
 
 async function fetchNutritionFromAPI(name) {
   try {

@@ -318,6 +318,8 @@ class _BarcodeScanPanelState extends State<BarcodeScanPanel> {
         fat: _scaledValue(product.fatPer100g, grams),
         foodName: product.displayName,
         gramsAdded: grams,
+        ingredients: product.ingredients,
+        possibleAllergens: product.possibleAllergens,
       ),
     );
 
@@ -722,6 +724,15 @@ class _BarcodeScanPanelState extends State<BarcodeScanPanel> {
 class _OpenFoodFactsService {
   static const _host = 'world.openfoodfacts.org';
 
+  List<String> _splitIngredients(String raw) {
+    return raw
+        .split(RegExp(r'[;,]|\b(?:and|or)\b'))
+        .map((value) => value.trim())
+        .map((value) => value.replaceAll(RegExp(r'^[a-z]{2}:'), ''))
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+  }
+
   Future<_OpenFoodFactsProduct> fetchByBarcode(String barcode) async {
     final cleanCode = barcode.replaceAll(RegExp(r'[^0-9]'), '').trim();
     if (cleanCode.isEmpty) {
@@ -739,7 +750,8 @@ class _OpenFoodFactsService {
 
     for (final candidate in candidates) {
       final uri = Uri.https(_host, '/api/v0/product/$candidate.json', {
-        'fields': 'code,product_name,brands,nutriments,quantity,serving_size',
+        'fields':
+            'code,product_name,brands,nutriments,quantity,serving_size,ingredients_text,allergens',
       });
 
       final response = await http.get(
@@ -821,6 +833,12 @@ class _OpenFoodFactsService {
         proteinPer100g: proteinPer100g,
         carbsPer100g: carbsPer100g,
         fatPer100g: fatPer100g,
+        ingredients: _splitIngredients(
+          (product['ingredients_text'] ?? '').toString(),
+        ),
+        possibleAllergens: _splitIngredients(
+          (product['allergens'] ?? '').toString(),
+        ),
       );
     }
 
@@ -860,6 +878,8 @@ class _OpenFoodFactsProduct {
   final double proteinPer100g;
   final double carbsPer100g;
   final double fatPer100g;
+  final List<String> ingredients;
+  final List<String> possibleAllergens;
 
   const _OpenFoodFactsProduct({
     required this.barcode,
@@ -869,5 +889,7 @@ class _OpenFoodFactsProduct {
     required this.proteinPer100g,
     required this.carbsPer100g,
     required this.fatPer100g,
+    this.ingredients = const [],
+    this.possibleAllergens = const [],
   });
 }

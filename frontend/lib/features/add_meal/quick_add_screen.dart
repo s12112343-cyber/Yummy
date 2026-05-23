@@ -85,6 +85,11 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
     final explicitGrams = (result['explicitGrams'] as num?)?.toDouble() ?? 0;
     final weightSource = (result['weightSource'] ?? 'api').toString();
     final mealName = (result['mealName'] ?? '').toString().trim();
+    final ingredients = (result['items'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map((item) => (item['name'] ?? '').toString().trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
 
     widget.onNutrientsAdded(
       AddedNutrients(
@@ -96,6 +101,7 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
         gramsAdded: weightSource == 'input'
             ? (explicitGrams > 0 ? explicitGrams : grams)
             : (grams > 0 ? grams : 100),
+        ingredients: ingredients,
       ),
     );
 

@@ -1,7 +1,9 @@
 const MealEntry = require("../models/MealEntry");
 const DailyWaterEntry = require("../models/DailyWaterEntry");
+const UserProfile = require("../models/UserProfile");
 const { analyzeQuickAddText } = require("../services/quickAddNutritionService");
 const { analyzeFoodImageWithAI } = require("../services/aiFoodVisionService");
+const { assessMealRestrictions } = require("../utils/mealRestrictionRules");
 const fs = require("fs/promises");
 
 const allowedMealTypes = new Set(["breakfast", "lunch", "snack", "dinner"]);
@@ -107,12 +109,52 @@ const addMealsBatch = async (req, res) => {
       return res.status(400).json({ message: "No meals to save" });
     }
 
+    const profile = await UserProfile.findOne({ user_id: userId }).lean();
+    const restrictions = profile
+      ? {
+          allergies: Array.isArray(profile.allergies) ? profile.allergies : [],
+          medical_conditions: Array.isArray(profile.medical_conditions)
+            ? profile.medical_conditions
+            : [],
+        }
+      : { allergies: [], medical_conditions: [] };
+
     const dayDate = dateFromDateKey(dateKey);
+
+    const blockingIssues = [];
 
     const docs = meals
       .map((meal) => {
         const mealName = (meal.mealName || "").toString().trim();
         if (!mealName) return null;
+
+        const ingredients = Array.isArray(meal.ingredients)
+          ? meal.ingredients.map((item) => (item || "").toString())
+          : [];
+        const possibleAllergens = Array.isArray(meal.possibleAllergens)
+          ? meal.possibleAllergens.map((item) => (item || "").toString())
+          : [];
+
+        const restrictionResult = assessMealRestrictions(
+          {
+            mealName,
+            ingredients,
+            possibleAllergens,
+            calories: numberOrZero(meal.calories),
+            protein: numberOrZero(meal.protein),
+            carbs: numberOrZero(meal.carbs),
+            fat: numberOrZero(meal.fat),
+          },
+          restrictions
+        );
+
+        if (restrictionResult.hasBlockedIssues) {
+          blockingIssues.push({
+            mealName,
+            issues: restrictionResult.issues,
+          });
+          return null;
+        }
 
         return {
           user: userId,
@@ -128,6 +170,13 @@ const addMealsBatch = async (req, res) => {
         };
       })
       .filter(Boolean);
+
+    if (blockingIssues.length > 0) {
+      return res.status(409).json({
+        message: "One or more meals conflict with your saved allergies or medical conditions.",
+        issues: blockingIssues,
+      });
+    }
 
     if (docs.length === 0) {
       return res.status(400).json({ message: "Meals payload is invalid" });

@@ -270,6 +270,8 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
         foodName: mealName,
         gramsAdded: estimatedWeightGrams > 0 ? estimatedWeightGrams : null,
         confidence: _mealConfidence,
+        ingredients: _recognizedIngredients,
+        possibleAllergens: _possibleAllergens,
       ),
     );
 
@@ -1107,7 +1109,6 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
         : confidence.clamp(0.0, 1.0).toDouble();
 
     return Container(
-      width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
@@ -1151,6 +1152,7 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
             ),
           ),
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 width: 58,
@@ -1182,8 +1184,9 @@ class _PhotoAnalyzePanelState extends State<PhotoAnalyzePanel>
                     const SizedBox(height: 6),
                     Text(
                       mealName,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                      softWrap: true,
+                      maxLines: 10,
+                      overflow: TextOverflow.visible,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 20,

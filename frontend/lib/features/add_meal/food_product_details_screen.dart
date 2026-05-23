@@ -2,8 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
+import 'package:provider/provider.dart';
 
 import '../api/edamam_api_service.dart';
+import '../../core/providers/user_provider.dart';
+import '../../core/services/meal_restrictions_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../shared/back_button_widget.dart';
 import 'food_search_panel.dart';
@@ -55,6 +59,327 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
   int _wholePortionCount = 1;
   double _fractionPortion = 0;
   String _selectedPortionUnit = 'piece';
+
+  MealRestrictionProfile _restrictionProfile() {
+    return MealRestrictionProfile.fromUser(context.read<UserProvider>().user);
+  }
+
+  Future<bool> _confirmMealAllowed({
+    required String mealName,
+    required List<String> ingredients,
+    required double calories,
+    required double protein,
+    required double carbs,
+    required double fat,
+  }) async {
+    final profile = _restrictionProfile();
+    if (profile.isEmpty) return true;
+
+    final assessment = MealRestrictionsService.assess(
+      profile: profile,
+      mealName: mealName,
+      ingredients: ingredients,
+      calories: calories,
+      protein: protein,
+      carbs: carbs,
+      fat: fat,
+    );
+
+    if (!assessment.hasIssues) return true;
+
+    final blockedIssues = assessment.issues
+        .where((issue) => issue.severity == MealRestrictionSeverity.blocked)
+        .toList(growable: false);
+
+    if (blockedIssues.isEmpty) return true;
+
+    final allergyIssues = blockedIssues
+        .where((issue) => issue.category == 'allergy')
+        .toList(growable: false);
+    final conditionIssues = blockedIssues
+        .where((issue) => issue.category == 'condition')
+        .toList(growable: false);
+
+    final allergyLines = allergyIssues
+        .expand(
+          (issue) => issue.matchedTerms.isNotEmpty
+              ? issue.matchedTerms
+              : <String>[issue.label],
+        )
+        .toSet()
+        .toList(growable: false);
+
+    final conditionLines = conditionIssues
+        .map((issue) => '${issue.label}: ${issue.reason}')
+        .toSet()
+        .toList(growable: false);
+
+    final hasAllergyIssues = allergyLines.isNotEmpty;
+    final hasConditionIssues = conditionLines.isNotEmpty;
+
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 420),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.16),
+                  blurRadius: 28,
+                  offset: const Offset(0, 18),
+                ),
+              ],
+              border: Border.all(color: const Color(0xFFF0D3D3), width: 1),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: SizedBox(
+                    height: 140,
+                    child: Lottie.asset(
+                      'assets/lottie/Warning - tekkis.json',
+                      fit: BoxFit.contain,
+                      repeat: false,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  hasAllergyIssues ? 'Allergy alert' : 'Condition alert',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.deepBlue,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 20,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  hasAllergyIssues
+                      ? 'This dish contains an ingredient that may trigger your allergy.'
+                      : 'This dish may not be suitable for one of your medical conditions.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.navy.withOpacity(0.78),
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                  ),
+                ),
+                if (hasAllergyIssues) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7F6),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFFF4C9C5)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Matched ingredient',
+                          style: TextStyle(
+                            color: Color(0xFFB9382E),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ...allergyLines.map(
+                          (ingredient) => Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Text(
+                              '• $ingredient',
+                              style: const TextStyle(
+                                color: Color(0xFF7D2620),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (hasAllergyIssues && hasConditionIssues)
+                  const SizedBox(height: 14),
+                if (hasConditionIssues) ...[
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF8EB),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFFF3D39A)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Condition note',
+                          style: TextStyle(
+                            color: Color(0xFF9A5F00),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ...conditionLines.map(
+                          (line) => Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Text(
+                              '• $line',
+                              style: const TextStyle(
+                                color: Color(0xFF7A4A00),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                if (hasAllergyIssues) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(false),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFB9382E),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 48,
+                          child: OutlinedButton(
+                            onPressed: () =>
+                                Navigator.of(dialogContext).pop(false),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.deepBlue,
+                              side: const BorderSide(color: Color(0xFFD8DDE6)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: const Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: SizedBox(
+                          height: 48,
+                          child: ElevatedButton(
+                            onPressed: () =>
+                                Navigator.of(dialogContext).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF1F8A3C),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: const Text(
+                              'Add anyway',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (hasAllergyIssues) return false;
+    return proceed == true;
+  }
+
+  Future<void> _handleAddPressed() async {
+    final addedCalories = _totalCalories();
+    final addedProtein = _totalProtein();
+    final addedCarbs = _totalCarbs();
+    final addedFat = _totalFat();
+    final ingredients = _ingredients
+        .map((ingredient) => ingredient.name.trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    final navigator = Navigator.of(context);
+
+    final allowed = await _confirmMealAllowed(
+      mealName: widget.item.name,
+      ingredients: ingredients,
+      calories: addedCalories,
+      protein: addedProtein,
+      carbs: addedCarbs,
+      fat: addedFat,
+    );
+
+    if (!mounted || !allowed) return;
+
+    if (!widget.isIngredientMode) {
+      widget.onCaloriesAdded?.call(addedCalories);
+    }
+    widget.onNutrientsAdded?.call(
+      AddedNutrients(
+        calories: addedCalories,
+        protein: addedProtein,
+        carbs: addedCarbs,
+        fat: addedFat,
+        foodName: widget.item.name,
+        gramsAdded: _portionGrams + _customIngredientsWeightTotal(),
+        ingredients: ingredients,
+        restrictionsChecked: true,
+      ),
+    );
+    navigator.pop();
+  }
 
   Map<String, double> get _nutritionTargets => {
     'Calories': (widget.dailyCalorieTarget ?? 2000).toDouble(),
@@ -1272,27 +1597,7 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
         child: SizedBox(
           height: 52,
           child: ElevatedButton(
-            onPressed: () {
-              final addedCalories = _totalCalories();
-              final addedProtein = _totalProtein();
-              final addedCarbs = _totalCarbs();
-              final addedFat = _totalFat();
-
-              if (!widget.isIngredientMode) {
-                widget.onCaloriesAdded?.call(addedCalories);
-              }
-              widget.onNutrientsAdded?.call(
-                AddedNutrients(
-                  calories: addedCalories,
-                  protein: addedProtein,
-                  carbs: addedCarbs,
-                  fat: addedFat,
-                  foodName: widget.item.name,
-                  gramsAdded: _portionGrams + _customIngredientsWeightTotal(),
-                ),
-              );
-              Navigator.of(context).pop();
-            },
+            onPressed: _handleAddPressed,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.navy,
               foregroundColor: Colors.white,
