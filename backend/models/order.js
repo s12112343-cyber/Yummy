@@ -76,14 +76,12 @@ const orderSchema = new mongoose.Schema(
 
     status: {
       type: String,
-
       enum: [
         'pending',
         'preparing',
         'completed',
         'cancelled',
       ],
-
       default: 'pending',
     },
 
@@ -100,3 +98,4 @@ module.exports = mongoose.model(
   'Order',
   orderSchema,
 );
+

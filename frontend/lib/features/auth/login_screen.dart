@@ -54,13 +54,19 @@ class _LoginScreenState extends State<LoginScreen>
         TweenSequenceItem(tween: Tween(begin: 8, end: -4), weight: 1),
         TweenSequenceItem(tween: Tween(begin: -4, end: 0), weight: 1),
       ],
-    ).animate(CurvedAnimation(parent: _shakeController, curve: Curves.easeOut));
+    ).animate(
+      CurvedAnimation(
+        parent: _shakeController,
+        curve: Curves.easeOut,
+      ),
+    );
 
     _loadRememberMePreference();
   }
 
   Future<void> _loadRememberMePreference() async {
     final savedValue = context.read<AuthProvider>().rememberMe;
+
     if (!mounted) return;
 
     setState(() {
@@ -77,6 +83,10 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   void _showError(String message) {
+    debugPrint("SHOW ERROR => $message");
+
+    if (!mounted) return;
+
     setState(() {
       _errorMessage = message;
       _loading = false;
@@ -94,8 +104,8 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
 
-    // Proper email validation using regex
     final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+
     if (!emailRegex.hasMatch(email)) {
       _showError("Please enter a valid email address");
       return;
@@ -126,10 +136,28 @@ class _LoginScreenState extends State<LoginScreen>
         rememberMe: _rememberMe,
       );
 
+      debugPrint("FULL LOGIN RESULT => $result");
+
       if (!mounted) return;
 
-      if (result['userId'] == null) {
-        _showError(result['message'] ?? 'Login failed');
+      final bool success = result['success'] == true;
+
+      if (!success) {
+        _showError(result['message']?.toString() ?? 'Login failed');
+        return;
+      }
+
+      final resultData = result['data'];
+      final resultUser = result['user'] ?? resultData?['user'];
+
+      final resultUserId =
+          result['userId'] ??
+          resultData?['userId'] ??
+          resultUser?['id'] ??
+          resultUser?['_id'];
+
+      if (resultUserId == null || resultUserId.toString().trim().isEmpty) {
+        _showError(result['message']?.toString() ?? 'Login failed');
         return;
       }
 
@@ -137,53 +165,65 @@ class _LoginScreenState extends State<LoginScreen>
 
       if (!mounted) return;
 
-      setState(() => _loading = false);
-
-      // Debug output to help diagnose missing role
-      print('LOGIN result => $result');
-      print('Fetched user => ${userProvider.user}');
-
       final prefs = await SharedPreferences.getInstance();
+
       final prefRole = prefs.getString('userRole');
 
       final role =
-          (result['user']?['role'] ??
+          (resultUser?['role'] ??
                   result['role'] ??
+                  resultData?['role'] ??
                   userProvider.user?['role'] ??
-                  prefRole)
-              ?.toString()
+                  prefRole ??
+                  'user')
+              .toString()
               .toLowerCase();
 
-      // Persist the resolved role so splash/startup can restore the same screen
-      await prefs.setString('userRole', role ?? 'user');
+      await prefs.setString('userRole', role);
 
       final chefId =
-          (result['user']?['chefId'] ??
+          (resultUser?['chefId'] ??
                   result['chefId'] ??
+                  resultData?['chefId'] ??
                   userProvider.user?['chefId'] ??
                   prefs.getString('chefId'))
               ?.toString();
+
       if (chefId != null && chefId.trim().isNotEmpty) {
         await prefs.setString('chefId', chefId);
       }
 
+      debugPrint("LOGIN ROLE => $role");
+      debugPrint("FETCHED USER => ${userProvider.user}");
+
       Widget destination;
+
       switch (role) {
         case 'admin':
           destination = const AdminDashboardScreen();
           break;
+
         case 'chef':
           destination = const ChefMainScreen();
           break;
+
         default:
           destination = const HomeScreen();
       }
 
-      Navigator.pushReplacement(
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+      });
+
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => destination),
+        (route) => false,
       );
     } catch (e) {
+      debugPrint("LOGIN ERROR => $e");
       _showError("Something went wrong");
     }
   }
@@ -201,8 +241,15 @@ class _LoginScreenState extends State<LoginScreen>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 SizedBox(height: h * 0.03),
-                const Row(children: [AppBackButton()]),
+
+                const Row(
+                  children: [
+                    AppBackButton(),
+                  ],
+                ),
+
                 const SizedBox(height: 20),
+
                 const Text(
                   "Welcome Back to Yummy",
                   textAlign: TextAlign.center,
@@ -212,7 +259,9 @@ class _LoginScreenState extends State<LoginScreen>
                     color: AppColors.darkBlue,
                   ),
                 ),
+
                 const SizedBox(height: 6),
+
                 Text(
                   "Track your meals. Stay healthy.",
                   textAlign: TextAlign.center,
@@ -223,7 +272,9 @@ class _LoginScreenState extends State<LoginScreen>
                     color: AppColors.dark.withOpacity(0.60),
                   ),
                 ),
+
                 const SizedBox(height: 22),
+
                 if (_errorMessage != null)
                   Container(
                     width: double.infinity,
@@ -235,7 +286,9 @@ class _LoginScreenState extends State<LoginScreen>
                     decoration: BoxDecoration(
                       color: const Color(0xFFFFE8E8),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFFFB3B3)),
+                      border: Border.all(
+                        color: const Color(0xFFFFB3B3),
+                      ),
                     ),
                     child: Row(
                       children: [
@@ -256,6 +309,7 @@ class _LoginScreenState extends State<LoginScreen>
                       ],
                     ),
                   ),
+
                 AnimatedBuilder(
                   animation: _shakeAnimation,
                   builder: (context, child) {
@@ -276,6 +330,7 @@ class _LoginScreenState extends State<LoginScreen>
                           prefixIcon: Icons.mail_outline_rounded,
                           validator: (v) => null,
                         ),
+
                         GlassTextField(
                           label: "",
                           hint: "••••••••",
@@ -297,7 +352,9 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                           validator: (v) => null,
                         ),
+
                         const SizedBox(height: 12),
+
                         Row(
                           children: [
                             Checkbox(
@@ -309,6 +366,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 });
                               },
                             ),
+
                             Text(
                               "Remember me",
                               style: TextStyle(
@@ -316,7 +374,9 @@ class _LoginScreenState extends State<LoginScreen>
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
+
                             const Spacer(),
+
                             TextButton(
                               onPressed: () {
                                 Navigator.push(
@@ -337,7 +397,9 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                           ],
                         ),
+
                         const SizedBox(height: 10),
+
                         SizedBox(
                           width: double.infinity,
                           height: 52,
@@ -357,7 +419,8 @@ class _LoginScreenState extends State<LoginScreen>
                                     height: 22,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2.4,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                      valueColor:
+                                          AlwaysStoppedAnimation<Color>(
                                         Colors.white,
                                       ),
                                     ),
@@ -376,7 +439,9 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
                 ),
+
                 const SizedBox(height: 26),
+
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -406,6 +471,7 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ],
                 ),
+
                 const SizedBox(height: 200),
               ],
             ),

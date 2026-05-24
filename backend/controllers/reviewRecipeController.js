@@ -1,70 +1,159 @@
 
 const RecipeReview =
-    require('../models/RecipeReview');
+  require('../models/RecipeReview');
 
 const Recipe =
-    require('../models/Recipe');
+  require('../models/Recipe');
 
+const Notification =
+  require('../models/Notification');
 
+const Chef =
+  require('../models/Chef');
+
+//
 // ✅ ADD REVIEW
+//
 const addRecipeReview =
 async (req, res) => {
 
   try {
 
     const {
-
       recipeId,
       rating,
       comment,
-
     } = req.body;
 
+    //
     // 🔥 CREATE REVIEW
+    //
     const review =
-        await RecipeReview.create({
+      await RecipeReview.create({
 
-      recipeId,
+        recipeId,
 
-      rating,
+        rating,
 
-      comment,
+        comment,
 
-      userId:
+        userId:
           req.user.userId,
 
-      userName:
+        userName:
           req.user.name,
-    });
 
+        userAvatar:
+          req.user.profileImage || '',
+      });
+
+    //
+    // 🔥 GET RECIPE
+    //
+    const recipe =
+      await Recipe.findById(
+        recipeId
+      );
+
+    //
+    // 🔥 GET CHEF
+    //
+    const chef =
+      await Chef.findById(
+        recipe.chefId
+      );
+
+    //
+    // 🔥 SEND NOTIFICATION
+    //
+    if (recipe && chef) {
+
+      const notification =
+        await Notification.create({
+
+          recipientId:
+            chef.userId.toString(),
+
+          actorId:
+            req.user.userId.toString(),
+
+          actorName:
+            req.user.name || "User",
+
+          actorImageUrl:
+            req.user.profileImage || "",
+
+          type: "recipe_review",
+
+          title:
+            "Recipe Rated 🍲",
+
+          body:
+            `${req.user.name} rated your recipe`,
+
+          isRead: false,
+
+          payload: {
+            recipeId:
+              recipe._id,
+          },
+        });
+
+      console.log(
+        "🔥 RECIPE NOTIFICATION SENT"
+      );
+
+      //
+      // 🔥 REALTIME SOCKET
+      //
+      const io =
+        req.app.get('io');
+
+      if (io) {
+
+        io.to(
+          chef.userId.toString()
+        ).emit(
+          'newNotification',
+          notification,
+        );
+      }
+    }
+
+    //
     // 🔥 GET ALL REVIEWS
-const reviews =
-    await RecipeReview.find({
-  recipeId,
-});
+    //
+    const reviews =
+      await RecipeReview.find({
+        recipeId,
+      });
 
-// 🔥 AVG REAL REVIEWS ONLY
-const avg =
-    reviews.reduce(
-      (sum, item) =>
+    //
+    // 🔥 AVG
+    //
+    const avg =
+      reviews.reduce(
+        (sum, item) =>
           sum + item.rating,
-      0,
-    ) / reviews.length;
+        0,
+      ) / reviews.length;
 
-// 🔥 UPDATE RECIPE
-await Recipe.findByIdAndUpdate(
-  recipeId,
-  {
-
-    rating:
-        reviews.length > 0
+    //
+    // 🔥 UPDATE RECIPE
+    //
+    await Recipe.findByIdAndUpdate(
+      recipeId,
+      {
+        rating:
+          reviews.length > 0
             ? avg
             : 4,
 
-    reviewsCount:
-        reviews.length,
-  },
-);
+        reviewsCount:
+          reviews.length,
+      },
+    );
+
     res.status(201).json({
 
       success: true,
@@ -74,7 +163,10 @@ await Recipe.findByIdAndUpdate(
 
   } catch (e) {
 
-    console.log(e);
+    console.log(
+      "ADD RECIPE REVIEW ERROR =>",
+      e,
+    );
 
     res.status(500).json({
 
@@ -85,22 +177,25 @@ await Recipe.findByIdAndUpdate(
   }
 };
 
-
-// ✅ GET RECIPE REVIEWS
-const getRecipeReviews = async (req, res) => {
+//
+// ✅ GET REVIEWS
+//
+const getRecipeReviews =
+async (req, res) => {
 
   try {
 
-    const { recipeId } = req.params;
+    const { recipeId } =
+      req.params;
 
     const reviews =
-        await RecipeReview.find({
+      await RecipeReview.find({
 
-      recipeId,
+        recipeId,
 
-    }).sort({
-      createdAt: -1,
-    });
+      }).sort({
+        createdAt: -1,
+      });
 
     res.json({
 
@@ -125,8 +220,9 @@ const getRecipeReviews = async (req, res) => {
   }
 };
 
-
-
+//
+// ✅ DELETE REVIEW
+//
 const deleteRecipeReview =
 async (req, res) => {
 
@@ -141,7 +237,7 @@ async (req, res) => {
       success: true,
 
       message:
-          'Review deleted',
+        'Review deleted',
     });
 
   } catch (e) {
@@ -159,10 +255,13 @@ async (req, res) => {
     });
   }
 };
+
 module.exports = {
 
   addRecipeReview,
 
   getRecipeReviews,
+
   deleteRecipeReview,
 };
+

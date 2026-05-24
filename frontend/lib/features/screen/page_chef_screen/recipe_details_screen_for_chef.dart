@@ -25,7 +25,7 @@ class RecipeDetailsScreen extends StatefulWidget {
 }
 
 class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
-  final String _selectedSize = 'Medium';
+  String _selectedSize = 'Medium';
   List<dynamic> recipeReviews = [];
 
   bool loadingReviews = true;
@@ -85,7 +85,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
 
                       fit: BoxFit.cover,
 
-                      errorBuilder: (_, _, _) {
+                      errorBuilder: (_, __, ___) {
                         return Container(
                           color: _kBackground,
 

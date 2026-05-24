@@ -1,184 +1,106 @@
-const Order = require('../models/Order');
+const Order =
+  require('../models/Order');
 
+const Chef =
+  require('../models/Chef');
+
+const Notification =
+  require('../models/Notification');
+
+//
+// ✅ CREATE ORDER
+//
 const createOrder = async (req, res) => {
-
   try {
+    const userId = req.user?.userId;
 
-    const userId =
-        req.user.userId;
-
-    const {
-
-      chefId,
-      dishName,
-      dishImage,
-
-      quantity,
-      price,
-
-      totalPrice,
-
-      phone,
-      city,
-      street,
-
-      paymentMethod,
-
-      specialInstructions,
-
-    } = req.body;
-
-    // 🔥 VALIDATION
-    if (!chefId) {
-
-      return res.status(400).json({
-
+    if (!userId) {
+      return res.status(401).json({
         success: false,
-
-        message:
-            'chefId is required',
+        message: 'Unauthorized: userId not found in token',
       });
     }
 
-    // 🔥 SAFE NUMBERS
-    const parsedQuantity =
+    const order = await Order.create({
+      chefId: req.body.chefId,
+      userId: userId, // ✅ من التوكن مش من Flutter
 
-        Number(quantity) || 1;
+      dishName: req.body.dishName || '',
+      dishImage: req.body.dishImage || '',
+      customerName: req.body.customerName || '',
+      customerAvatar: req.body.customerAvatar || '',
 
-    const parsedPrice =
+      quantity: req.body.quantity || 1,
+      price: req.body.price || 0,
+      totalPrice: req.body.totalPrice || 0,
 
-        Number(price) || 0;
-
-    // 🔥 FINAL TOTAL PRICE
-    const finalTotalPrice =
-
-        totalPrice != null
-
-            ? Number(totalPrice)
-
-            : parsedPrice *
-                parsedQuantity;
-
-    // 🔥 CREATE ORDER
-    const order =
-        await Order.create({
-
-      chefId,
-      userId,
-
-      dishName,
-      dishImage,
-
-      quantity:
-          parsedQuantity,
-
-      price:
-          parsedPrice,
-
-      totalPrice:
-          finalTotalPrice,
-
-      phone,
-      city,
-      street,
-
-      paymentMethod,
-
-      specialInstructions,
-
-      customerName:
-
-          req.user.name || '',
-
-      customerAvatar:
-
-          req.user.profileImage || '',
-
+      phone: req.body.phone || '',
+      city: req.body.city || '',
+      street: req.body.street || '',
+      paymentMethod: req.body.paymentMethod || 'cash',
+      specialInstructions: req.body.specialInstructions || '',
       status: 'pending',
     });
 
-    // 🔥 SOCKET REALTIME
-    const io =
-        req.app.get('io');
+    const chef = await Chef.findById(order.chefId);
 
-    if (io) {
+    if (chef) {
+      const notification = await Notification.create({
+        recipientId: chef.userId.toString(),
+        actorId: userId.toString(),
+        actorName: order.customerName || 'Customer',
+        actorImageUrl: order.customerAvatar || '',
+        type: 'order',
+        title: 'New Order 🍽️',
+        body: `${order.customerName || 'Customer'} placed a new order`,
+        isRead: false,
+        payload: {
+          orderId: order._id,
+        },
+      });
 
-      io.to(chefId)
-          .emit(
-            'newOrder',
-            order,
-          );
+      const io = req.app.get('io');
+
+      if (io) {
+        io.to(chef.userId.toString()).emit(
+          'newNotification',
+          notification,
+        );
+      }
+
+      console.log('🔥 ORDER NOTIFICATION SENT');
     }
 
     res.status(201).json({
-
       success: true,
-
       order,
     });
-
   } catch (e) {
-
-    console.log(
-      'CREATE ORDER ERROR =>',
-      e,
-    );
+    console.log('CREATE ORDER ERROR =>', e);
 
     res.status(500).json({
-
       success: false,
-
       message: e.message,
     });
   }
 };
-const getChefOrders = async (
-  req,
-  res,
-) => {
+
+//
+// ✅ GET CHEF ORDERS
+//
+const getChefOrders =
+async (req, res) => {
 
   try {
 
-    const chefId =
-        req.params.chefId;
-
-    // ✅ FIX NULL
-    if (
-
-        !chefId ||
-
-        chefId === 'null' ||
-
-        chefId === 'undefined'
-
-    ) {
-
-      return res.status(400).json({
-
-        success: false,
-
-        message:
-            'chefId is required',
-      });
-    }
-
     const orders =
-        await Order.find({
+      await Order.find({
 
-      chefId,
-    })
-
-    .populate(
-
-      'userId',
-
-      'name email profileImage',
-    )
-
-    .sort({
-
-      createdAt: -1,
-    });
+        chefId:
+          req.params.chefId,
+      }).sort({
+        createdAt: -1,
+      });
 
     res.json({
 
@@ -190,9 +112,7 @@ const getChefOrders = async (
   } catch (e) {
 
     console.log(
-
-      'GET CHEF ORDERS ERROR =>',
-
+      "GET CHEF ORDERS ERROR =>",
       e,
     );
 
@@ -204,64 +124,32 @@ const getChefOrders = async (
     });
   }
 };
-const getAllOrders = async (
-  req,
-  res,
-) => {
+
+//
+// ✅ GET ALL ORDERS
+//
+const getAllOrders =
+async (req, res) => {
 
   try {
 
-    const orders = await Order.find()
-
-      .populate({
-        path: 'chefId',
-
-        populate: {
-          path: 'userId',
-          select: 'name profileImage',
-        },
-      })
-
-      .populate(
-        'userId',
-        'name email profileImage',
-      )
-
-      .sort({
-        createdAt: -1,
-      });
-
-    // 🔥 FIX UNKNOWN CHEF
-    const formattedOrders =
-        orders.map((order) => ({
-
-      ...order._doc,
-
-      chefId: {
-
-        ...order.chefId?._doc,
-
-        name:
-
-            order.chefId?.businessName ||
-
-            order.chefId?.userId?.name ||
-
-            'Unknown Chef',
-      },
-    }));
+    const orders =
+      await Order.find()
+        .sort({
+          createdAt: -1,
+        });
 
     res.json({
 
       success: true,
 
-      orders: formattedOrders,
+      orders,
     });
 
   } catch (e) {
 
     console.log(
-      'GET ALL ORDERS ERROR =>',
+      "GET ALL ORDERS ERROR =>",
       e,
     );
 
@@ -273,67 +161,185 @@ const getAllOrders = async (
     });
   }
 };
-const updateOrderStatus = async (
-  req,
-  res,
-) => {
+
+//
+// ✅ UPDATE ORDER STATUS
+//
+const updateOrderStatus =
+async (req, res) => {
 
   try {
 
-    const { status } = req.body;
+    const { status } =
+      req.body;
 
     const order =
-        await Order.findByIdAndUpdate(
-
-      req.params.id,
-
-      {
-        status:
-            status.toString().toLowerCase(),
-      },
-
-      {
-        new: true,
-      }
-    );
+      await Order.findById(
+        req.params.id
+      );
 
     if (!order) {
 
       return res.status(404).json({
         success: false,
-        message: 'Order not found',
+        message:
+          'Order not found',
       });
     }
 
-    const io = req.app.get('io');
+    //
+    // 🔥 UPDATE STATUS
+    //
+    order.status =
+      status.toString().toLowerCase();
 
-    io.emit(
-      'orderStatusUpdated',
-      order,
-    );
+    await order.save();
+
+    //
+    // 🔥 NOTIFICATION
+    //
+    let notificationTitle = '';
+
+    let notificationBody = '';
+
+    switch (
+      status.toLowerCase()
+    ) {
+
+      case 'pending':
+
+        notificationTitle =
+          'Order Received 📦';
+
+        notificationBody =
+          'The chef received your order';
+
+        break;
+
+      case 'preparing':
+
+        notificationTitle =
+          'Preparing Order 👨‍🍳';
+
+        notificationBody =
+          'The chef is preparing your order';
+
+        break;
+
+      case 'completed':
+
+        notificationTitle =
+          'Order Completed ✅';
+
+        notificationBody =
+          'Your order is ready';
+
+        break;
+
+      case 'cancelled':
+
+        notificationTitle =
+          'Order Cancelled ❌';
+
+        notificationBody =
+          'Your order has been cancelled';
+
+        break;
+    }
+
+    //
+    // 🔥 SEND NOTIFICATION TO USER
+    //
+    if (
+      notificationTitle !== ''
+    ) {
+
+      const notification =
+        await Notification.create({
+
+          recipientId:
+            order.userId.toString(),
+
+          actorId:
+            order.chefId.toString(),
+
+          actorName:
+            'Chef',
+
+          actorImageUrl: '',
+
+          type:
+            'order_status',
+
+          title:
+            notificationTitle,
+
+          body:
+            notificationBody,
+
+          isRead: false,
+
+          payload: {
+            orderId:
+              order._id,
+
+            status:
+              order.status,
+          },
+        });
+
+      //
+      // 🔥 REALTIME
+      //
+      const io =
+        req.app.get('io');
+
+      if (io) {
+
+        io.to(
+          order.userId.toString()
+        ).emit(
+          'newNotification',
+          notification,
+        );
+      }
+
+      console.log(
+        "🔥 ORDER STATUS NOTIFICATION SENT"
+      );
+    }
 
     res.json({
+
       success: true,
+
       order,
     });
 
   } catch (e) {
 
     console.log(
-      'UPDATE STATUS ERROR =>',
+      "UPDATE ORDER STATUS ERROR =>",
       e,
     );
 
     res.status(500).json({
+
       success: false,
+
       message: e.message,
     });
   }
 };
 
 module.exports = {
+
   createOrder,
+
   getChefOrders,
+
   getAllOrders,
+
   updateOrderStatus,
 };
+

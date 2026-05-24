@@ -54,7 +54,7 @@ class _AddReviewScreenState extends State<AddReviewScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
-
+      print("TOKEN => $token");
       if (token == null) {
         setState(() => _errorMessage = 'Please login first');
         _isSubmitting = false;

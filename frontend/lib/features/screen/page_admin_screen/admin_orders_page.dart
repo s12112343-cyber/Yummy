@@ -323,7 +323,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage>
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: tabs.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
           final tab = tabs[index];
           final isSelected = _selectedTab == tab['key'];

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/features/screen/page_recipe_screen/recipes_page.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import '../core/providers/home_provider.dart';
@@ -200,7 +201,7 @@ class CustomBottomNav extends StatelessWidget {
         page = const HomeCooksScreen();
         break;
       case 3:
-        page = const DummyNavScreen(title: "Recipe", currentIndex: 3);
+        page = const RecipesPage();
         break;
       case 4:
         page = const PostScreen();
@@ -553,7 +554,7 @@ class CustomBottomNav extends StatelessWidget {
                     child: Image.asset(
                       'assets/icons/bell pink.png',
                       fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) {
+                      errorBuilder: (_, __, ___) {
                         return const Icon(
                           Icons.notifications_none_rounded,
                           size: 14,
@@ -587,7 +588,7 @@ class CustomBottomNav extends StatelessWidget {
                 child: Image.asset(
                   'assets/icons/water.png',
                   fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) {
+                  errorBuilder: (_, __, ___) {
                     return const Icon(
                       Icons.local_drink_rounded,
                       color: AppColors.mediumBlue,

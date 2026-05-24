@@ -184,7 +184,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             const SizedBox(height: 16),
 
             DropdownButtonFormField<String>(
-              initialValue: difficulty,
+              value: difficulty,
 
               items: ['Easy', 'Medium', 'Hard'].map((e) {
                 return DropdownMenuItem(value: e, child: Text(e));

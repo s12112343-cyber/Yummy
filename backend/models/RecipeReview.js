@@ -1,55 +1,66 @@
 const mongoose =
-    require('mongoose');
+  require('mongoose');
 
 const recipeReviewSchema =
-    new mongoose.Schema({
+  new mongoose.Schema({
 
-  recipeId: {
+    recipeId: {
 
-    type:
+      type:
         mongoose.Schema.Types.ObjectId,
 
-    ref: 'Recipe',
+      ref: 'Recipe',
 
-    required: true,
-  },
+      required: true,
+    },
 
-  userId: {
+    userId: {
 
-    type:
+      type:
         mongoose.Schema.Types.ObjectId,
 
-    ref: 'User',
-  },
+      ref: 'User',
+    },
 
-  userName: {
+    userName: {
 
-    type: String,
+      type: String,
 
-    default: '',
-  },
+      default: '',
+    },
 
-  rating: {
+    //
+    // 🔥 ADD THIS
+    //
+    userAvatar: {
 
-    type: Number,
+      type: String,
 
-    required: true,
-  },
+      default: '',
+    },
 
-  comment: {
+    rating: {
 
-    type: String,
+      type: Number,
 
-    default: '',
-  },
+      required: true,
+    },
 
-}, {
+    comment: {
 
-  timestamps: true,
-});
+      type: String,
+
+      default: '',
+    },
+
+  }, {
+
+    timestamps: true,
+  });
 
 module.exports =
-    mongoose.model(
-      'RecipeReview',
-      recipeReviewSchema,
-    );
+  mongoose.model(
+    'RecipeReview',
+    recipeReviewSchema,
+  );
+

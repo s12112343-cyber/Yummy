@@ -9,6 +9,8 @@ const {
   getAllReviewsForAdmin,
   approveReview,
   rejectReview,
+  deleteReview,
+  markReviewRead,
 
 } = require('../controllers/reviewController');
 
@@ -20,7 +22,7 @@ const {
 } = require('../middleware/authMiddleware');
 
 
-// ✅ USER
+// ✅ USER ADD REVIEW
 router.post(
   '/',
   verifyToken,
@@ -50,11 +52,23 @@ router.put(
   approveReview,
 );
 
-router.delete(
-  '/admin/:id',
+router.put(
+  '/admin/reject/:id',
   verifyToken,
   adminOnly,
   rejectReview,
 );
 
+router.delete(
+  '/admin/delete/:id',
+  verifyToken,
+  adminOnly,
+  deleteReview,
+);
+router.patch(
+  '/read/:id',
+  verifyToken,
+  adminOnly,
+  markReviewRead,
+);
 module.exports = router;

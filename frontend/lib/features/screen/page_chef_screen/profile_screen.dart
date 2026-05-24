@@ -11,6 +11,8 @@ import 'add_recipe_screen.dart';
 import 'recipe_details_screen_for_chef.dart';
 import 'package:frontend/features/auth/splash_screen.dart';
 import 'package:frontend/features/auth/login_screen.dart';
+import 'chef_banners_page.dart';
+import '../../../core/services/chef_socket_service.dart';
 
 const _kPrimaryDark = Color(0xFF0A1628);
 const _kPrimaryLight = Color(0xFF3B82F6);
@@ -74,9 +76,26 @@ class _ChefProfileScreenState extends State<ChefProfileScreen>
   @override
   void initState() {
     super.initState();
+
     _tabController = TabController(length: 3, vsync: this);
+
     cacheBuster = DateTime.now().millisecondsSinceEpoch.toString();
+
     _loadChef();
+
+    _connectSocket(); // 🔥 أضيفي هاد
+  }
+
+  Future<void> _connectSocket() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final userId = prefs.getString('userId');
+
+    if (userId == null) return;
+
+    ChefSocketService.connect(userId);
+
+    print("SOCKET CONNECTED => $userId");
   }
 
   @override
@@ -661,7 +680,35 @@ class _ChefProfileScreenState extends State<ChefProfileScreen>
                         _showChangePasswordDialog();
                       },
                     ),
+                    const SizedBox(height: 12),
 
+                    _buildModernSettingsTile(
+                      icon: Icons.campaign_rounded,
+                      iconColor: _kAccent,
+                      title: 'Add Banner',
+                      subtitle: 'Send banner request to admin',
+                      onTap: () {
+                        Navigator.pop(context);
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ChefBannersPage(),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildModernSettingsTile(
+                      icon: Icons.notifications_active_rounded,
+                      iconColor: Colors.purple,
+                      title: 'Send Notification',
+                      subtitle: 'Request notification for users',
+                      onTap: () {
+                        Navigator.pop(context);
+
+                        _showNotificationRequestDialog();
+                      },
+                    ),
                     const SizedBox(height: 24),
                     Container(
                       margin: const EdgeInsets.only(bottom: 32),
@@ -756,7 +803,7 @@ class _ChefProfileScreenState extends State<ChefProfileScreen>
                   ],
                 ),
               ),
-              ?trailing,
+              if (trailing != null) trailing,
             ],
           ),
         ),
@@ -1422,9 +1469,9 @@ class _ChefProfileScreenState extends State<ChefProfileScreen>
                       borderRadius: BorderRadius.circular(20),
                       child: (chef?['coverImage'] ?? '').isNotEmpty
                           ? Image.network(
-                              '$base${chef?['coverImage']}?t=$cacheBuster',
+                              '${base}${chef?['coverImage']}?t=$cacheBuster',
                               fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) =>
+                              errorBuilder: (_, __, ___) =>
                                   _buildCoverFallback(),
                             )
                           : _buildCoverFallback(),
@@ -1492,9 +1539,9 @@ class _ChefProfileScreenState extends State<ChefProfileScreen>
                     child: ClipOval(
                       child: (chef?['profileImage'] ?? '').isNotEmpty
                           ? Image.network(
-                              '$base${chef?['profileImage']}?t=$cacheBuster',
+                              '${base}${chef?['profileImage']}?t=$cacheBuster',
                               fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) =>
+                              errorBuilder: (_, __, ___) =>
                                   _buildAvatarFallback(chef?['name'] ?? 'Chef'),
                             )
                           : _buildAvatarFallback(chef?['name'] ?? 'Chef'),
@@ -1942,7 +1989,7 @@ class _ChefProfileScreenState extends State<ChefProfileScreen>
                         width: double.infinity,
                         fit: BoxFit.cover,
 
-                        errorBuilder: (_, _, _) {
+                        errorBuilder: (_, __, ___) {
                           print("IMAGE ERROR => ${recipe['image']}");
 
                           return Container(
@@ -2348,7 +2395,7 @@ class _ChefProfileScreenState extends State<ChefProfileScreen>
 
       itemCount: reviews.length,
 
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
 
       itemBuilder: (context, index) {
         final review = reviews[index];
@@ -2461,6 +2508,196 @@ class _ChefProfileScreenState extends State<ChefProfileScreen>
   // ============================================================
   // 📱 MAIN BUILD
   // ============================================================
+  void _showNotificationRequestDialog() {
+    final titleCtrl = TextEditingController();
+
+    final messageCtrl = TextEditingController();
+
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+
+            title: const Text(
+              'Send Notification Request',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleCtrl,
+                    decoration: InputDecoration(
+                      hintText: 'Notification title',
+
+                      filled: true,
+
+                      fillColor: _kBackground,
+
+                      prefixIcon: const Icon(Icons.title_rounded),
+
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  TextField(
+                    controller: messageCtrl,
+
+                    maxLines: 5,
+
+                    decoration: InputDecoration(
+                      hintText: 'Write your message here...',
+
+                      filled: true,
+
+                      fillColor: _kBackground,
+
+                      prefixIcon: const Padding(
+                        padding: EdgeInsets.only(bottom: 70),
+                        child: Icon(Icons.message_rounded),
+                      ),
+
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+
+                child: const Text('Cancel'),
+              ),
+
+              ElevatedButton.icon(
+                onPressed: isLoading
+                    ? null
+                    : () async {
+                        if (titleCtrl.text.trim().isEmpty) {
+                          _showError('Please enter title');
+
+                          return;
+                        }
+
+                        if (messageCtrl.text.trim().isEmpty) {
+                          _showError('Please enter message');
+
+                          return;
+                        }
+
+                        setModalState(() {
+                          isLoading = true;
+                        });
+
+                        try {
+                          final prefs = await SharedPreferences.getInstance();
+
+                          final token = prefs.getString('token');
+
+                          final res = await http.post(
+                            Uri.parse(
+                              '${AppConfig.baseUrl}/notification-requests',
+                            ),
+
+                            headers: {
+                              'Authorization': 'Bearer $token',
+
+                              'Content-Type': 'application/json',
+                            },
+
+                            body: jsonEncode({
+                              'title': titleCtrl.text.trim(),
+
+                              'message': messageCtrl.text.trim(),
+
+                              'chefName': chef?['name'],
+                            }),
+                          );
+
+                          print('REQUEST STATUS => ${res.statusCode}');
+
+                          print('REQUEST BODY => ${res.body}');
+
+                          if (res.statusCode == 201 || res.statusCode == 200) {
+                            if (!mounted) return;
+
+                            Navigator.pop(context);
+
+                            _showSuccess('Request sent to admin 🔥');
+                          } else {
+                            final data = jsonDecode(res.body);
+
+                            _showError(
+                              data['message'] ?? 'Failed to send request',
+                            );
+                          }
+                        } catch (e) {
+                          print(e);
+
+                          _showError(e.toString());
+                        }
+
+                        setModalState(() {
+                          isLoading = false;
+                        });
+                      },
+
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.purple,
+
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+
+                icon: isLoading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Icon(Icons.send_rounded, color: Colors.white),
+
+                label: Text(
+                  isLoading ? 'Sending...' : 'Send',
+
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2601,7 +2838,7 @@ class _ChefProfileScreenState extends State<ChefProfileScreen>
                     ? Image.network(
                         '$base$coverImage?t=$cacheBuster',
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => _buildCoverFallback(),
+                        errorBuilder: (_, __, ___) => _buildCoverFallback(),
                       )
                     : _buildCoverFallback(),
               ),
@@ -2650,7 +2887,7 @@ class _ChefProfileScreenState extends State<ChefProfileScreen>
                               ? Image.network(
                                   '$base$image?t=$cacheBuster',
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) =>
+                                  errorBuilder: (_, __, ___) =>
                                       _buildAvatarFallback(name),
                                 )
                               : _buildAvatarFallback(name),

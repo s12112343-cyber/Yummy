@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '../../../core/config/app_config.dart';
+import '../../../../core/config/app_config.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🎨 COLOR PALETTE - Premium Food App Theme
@@ -144,7 +144,7 @@ class ChefOrdersScreen extends StatefulWidget {
 class _ChefOrdersScreenState extends State<ChefOrdersScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final bool _isLoading = false;
+  bool _isLoading = false;
   OrderStatus _selectedFilter = OrderStatus.pending;
   List<OrderItem> _allOrders = [];
   bool _socketConnected = false;
@@ -191,7 +191,6 @@ class _ChefOrdersScreenState extends State<ChefOrdersScreen>
       final response = await http.get(
         Uri.parse('${AppConfig.baseUrl}/orders/chef/$chefId'),
       );
-
       print(response.body);
 
       if (response.statusCode == 200) {
@@ -524,7 +523,7 @@ class _ChefOrdersScreenState extends State<ChefOrdersScreen>
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
       itemCount: _filteredOrders.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 16),
+      separatorBuilder: (_, __) => const SizedBox(height: 16),
       itemBuilder: (context, index) {
         return TweenAnimationBuilder<double>(
           tween: Tween(begin: 0.0, end: 1.0),
@@ -627,8 +626,8 @@ class _ChefOrdersScreenState extends State<ChefOrdersScreen>
     return ListView.separated(
       padding: const EdgeInsets.all(20),
       itemCount: 5,
-      separatorBuilder: (_, _) => const SizedBox(height: 16),
-      itemBuilder: (_, _) => const ShimmerOrderCard(),
+      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      itemBuilder: (_, __) => const ShimmerOrderCard(),
     );
   }
 
@@ -799,7 +798,7 @@ class OrderCard extends StatelessWidget {
 
                             fit: BoxFit.cover,
 
-                            errorBuilder: (_, _, _) {
+                            errorBuilder: (_, __, ___) {
                               return Container(
                                 color: AppColors.primary.withOpacity(0.1),
 
@@ -910,7 +909,7 @@ class OrderCard extends StatelessWidget {
                           width: double.infinity,
                           height: double.infinity,
 
-                          errorBuilder: (_, _, _) => Container(
+                          errorBuilder: (_, __, ___) => Container(
                             color: AppColors.background,
 
                             child: const Icon(

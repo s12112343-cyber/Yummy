@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/services/cart_service.dart';
 import 'checkout_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/config/app_config.dart';
 
 // ─── Colors ────────────────────────────────────────────────────────────────

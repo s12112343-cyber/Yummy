@@ -3,8 +3,9 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const helmet = require("helmet");
 const http = require("http");
-const connectDB = require("./config/db");
 const path = require("path");
+
+const connectDB = require("./config/db");
 
 dotenv.config();
 connectDB();
@@ -17,6 +18,7 @@ const socket = require("./socket");
 socket.init(server);
 app.set("io", socket.getIO());
 
+// Request logger
 app.use((req, res, next) => {
   console.log("🔥 REQUEST:", req.method, req.originalUrl);
   next();
@@ -32,6 +34,7 @@ app.use((req, res, next) => {
   ) {
     return res.redirect(`https://${req.header("host")}${req.url}`);
   }
+
   next();
 });
 
@@ -94,6 +97,21 @@ app.use("/api/recipes", require("./routes/recipeRoutes"));
 app.use("/api/orders", require("./routes/orderRoutes"));
 app.use("/api/review-recipe", require("./routes/reviewRecipeRoutes"));
 
+// Admin routes
+app.use("/api/admin", require("./routes/adminRoutes"));
+
+// Banner request routes
+app.use("/api/banner-requests", require("./routes/bannerRequestRoutes"));
+
+// App settings routes
+app.use("/api/app-settings", require("./routes/appSettingsRoutes"));
+
+// Notification request routes
+app.use(
+  "/api/notification-requests",
+  require("./routes/notificationRequestRoutes")
+);
+
 // Meals routes
 app.use("/api/meals", (req, res, next) => {
   console.log(`MEALS ${req.method} ${req.originalUrl}`);
@@ -110,8 +128,9 @@ app.use("/api/posts", require("./routes/postRoutes"));
 
 // Feedback route
 app.use("/api/feedback", require("./routes/feedbackRoutes"));
-// Chat routes (message persistence + conversation fetch)
-app.use('/api/chat', require('./routes/chatRoutes'));
+
+// Chat routes
+app.use("/api/chat", require("./routes/chatRoutes"));
 
 // 404 Handler
 app.use((req, res) => {

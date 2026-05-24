@@ -180,9 +180,8 @@ class _AdminFeedbackPageState extends State<AdminFeedbackPage> {
   Future<void> _markAllRead() async {
     try {
       final token = await AuthService().getToken();
-      if (token == null || token.trim().isEmpty) {
+      if (token == null || token.trim().isEmpty)
         throw Exception('No admin token found');
-      }
 
       final response = await http.patch(
         Uri.parse('${AppConfig.baseUrl}/feedback/admin/mark-read-all'),
@@ -306,24 +305,7 @@ class _AdminFeedbackPageState extends State<AdminFeedbackPage> {
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: _white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new_rounded,
-            color: _text,
-            size: 20,
-          ),
-          onPressed: widget.onBack ?? () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Feedback',
-          style: TextStyle(
-            color: _text,
-            fontWeight: FontWeight.w700,
-            fontSize: 17,
-          ),
-        ),
+        automaticallyImplyLeading: false,
         actions: [
           TextButton(
             onPressed: _loading ? null : _markAllRead,
@@ -491,9 +473,8 @@ class _AdminFeedbackPageState extends State<AdminFeedbackPage> {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: InkWell(
                       onTap: () {
-                        if (feedbackId.isNotEmpty) {
+                        if (feedbackId.isNotEmpty)
                           _markAsRead(feedbackId, index - 1);
-                        }
                       },
                       child: Container(
                         decoration: BoxDecoration(

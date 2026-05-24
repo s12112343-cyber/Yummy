@@ -10,6 +10,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'add_recipe_screen.dart';
 import 'orders_screen.dart';
 import 'profile_screen.dart';
+import 'notifications_page.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🎨 PREMIUM COLOR PALETTE
@@ -470,7 +471,7 @@ class _ChefDashboardScreenState extends State<ChefDashboardScreen>
                                     ? chefImage
                                     : '${AppConfig.baseUrl.replaceAll('/api', '')}$chefImage',
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) =>
+                                errorBuilder: (_, __, ___) =>
                                     _buildAvatarFallback(),
                               )
                             : _buildAvatarFallback(),
@@ -519,7 +520,14 @@ class _ChefDashboardScreenState extends State<ChefDashboardScreen>
                               color: Colors.white,
                               size: 24,
                             ),
-                            onPressed: () {},
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const NotificationsPage(),
+                                ),
+                              );
+                            },
                           ),
                         ),
                         if (ordersToday > 0)
@@ -841,48 +849,6 @@ class _ChefDashboardScreenState extends State<ChefDashboardScreen>
               ),
 
               const SizedBox(width: 8),
-
-              Flexible(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        AppColors.success.withOpacity(0.1),
-                        AppColors.success.withOpacity(0.05),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppColors.success.withOpacity(0.3),
-                    ),
-                  ),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.attach_money_rounded,
-                          size: 14,
-                          color: AppColors.success,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '\$${weeklyEarnings.reduce((a, b) => a + b).toStringAsFixed(0)}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.success,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 32),
@@ -1302,7 +1268,7 @@ class _ChefDashboardScreenState extends State<ChefDashboardScreen>
                                   ? order.dishImage
                                   : '${AppConfig.baseUrl.replaceAll('/api', '')}${order.dishImage}',
                               fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) => const Icon(
+                              errorBuilder: (_, __, ___) => const Icon(
                                 Icons.fastfood,
                                 color: AppColors.primary,
                               ),

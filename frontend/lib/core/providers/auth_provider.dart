@@ -1,4 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
+import 'package:frontend/core/config/app_config.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/auth_service.dart';
 
@@ -6,7 +11,7 @@ enum AuthStatus { unknown, authenticated, unauthenticated }
 
 class AuthProvider extends ChangeNotifier {
   AuthProvider({AuthService? authService})
-    : _authService = authService ?? AuthService();
+      : _authService = authService ?? AuthService();
 
   final AuthService _authService;
 
@@ -28,7 +33,9 @@ class AuthProvider extends ChangeNotifier {
     _token = await _authService.getToken();
     _userId = await _authService.getUserId();
 
-    final hasSession = _rememberMe && _token != null && _token!.isNotEmpty;
+    final hasSession =
+        _rememberMe && _token != null && _token!.isNotEmpty;
+
     _status = hasSession
         ? AuthStatus.authenticated
         : AuthStatus.unauthenticated;
@@ -47,25 +54,112 @@ class AuthProvider extends ChangeNotifier {
   }) async {
     _setLoading(true);
 
-    final result = await _authService.login(
-      email: email,
-      password: password,
-      rememberMe: rememberMe,
-    );
+    try {
+      final response = await http.post(
+        Uri.parse('${AppConfig.baseUrl}/auth/login'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'email': email,
+          'password': password,
+        }),
+      );
 
-    _rememberMe = rememberMe;
-    _token = await _authService.getToken();
-    _userId = await _authService.getUserId();
-    _status = (_token != null && _token!.isNotEmpty)
-        ? AuthStatus.authenticated
-        : AuthStatus.unauthenticated;
+      final data = jsonDecode(response.body);
 
-    if (_status == AuthStatus.authenticated) {
-      await _authService.registerDeviceToken();
+      debugPrint("LOGIN STATUS => ${response.statusCode}");
+      debugPrint("LOGIN DATA => $data");
+
+      if (response.statusCode == 200) {
+        final prefs = await SharedPreferences.getInstance();
+
+        final token = data['token'];
+
+        if (token != null) {
+          await prefs.setString('token', token.toString());
+          _token = token.toString();
+        }
+
+        final user = data['user'];
+
+        if (user != null) {
+          final savedUserId =
+              user['id'] ?? user['_id'] ?? data['userId'];
+
+          if (savedUserId != null) {
+            await prefs.setString('userId', savedUserId.toString());
+            _userId = savedUserId.toString();
+          }
+
+          await prefs.setString(
+            'userName',
+            user['name']?.toString() ?? '',
+          );
+
+          await prefs.setString(
+            'userEmail',
+            user['email']?.toString() ?? '',
+          );
+
+          await prefs.setString(
+            'userRole',
+            user['role']?.toString() ?? '',
+          );
+
+          if (user['profileImage'] != null) {
+            await prefs.setString(
+              'profileImage',
+              user['profileImage'].toString(),
+            );
+          }
+        } else if (data['userId'] != null) {
+          await prefs.setString(
+            'userId',
+            data['userId'].toString(),
+          );
+          _userId = data['userId'].toString();
+        }
+
+        _rememberMe = rememberMe;
+        await prefs.setBool('rememberMe', rememberMe);
+
+        _status = (_token != null && _token!.isNotEmpty)
+            ? AuthStatus.authenticated
+            : AuthStatus.unauthenticated;
+
+        if (_status == AuthStatus.authenticated) {
+          await _authService.registerDeviceToken();
+        }
+
+        notifyListeners();
+
+        return {
+          'success': true,
+          'data': data,
+        };
+      }
+
+      _status = AuthStatus.unauthenticated;
+      notifyListeners();
+
+      return {
+        'success': false,
+        'message': data['message'] ?? 'Login failed',
+      };
+    } catch (e) {
+      debugPrint("LOGIN ERROR => $e");
+
+      _status = AuthStatus.unauthenticated;
+      notifyListeners();
+
+      return {
+        'success': false,
+        'message': e.toString(),
+      };
+    } finally {
+      _setLoading(false);
     }
-
-    _setLoading(false);
-    return result;
   }
 
   Future<Map<String, dynamic>> register({
@@ -74,23 +168,29 @@ class AuthProvider extends ChangeNotifier {
   }) async {
     _setLoading(true);
 
-    final result = await _authService.register(
-      email: email,
-      password: password,
-    );
+    try {
+      final result = await _authService.register(
+        email: email,
+        password: password,
+      );
 
-    _token = await _authService.getToken();
-    _userId = await _authService.getUserId();
-    _status = (_token != null && _token!.isNotEmpty)
-        ? AuthStatus.authenticated
-        : AuthStatus.unauthenticated;
+      _token = await _authService.getToken();
+      _userId = await _authService.getUserId();
 
-    if (_status == AuthStatus.authenticated) {
-      await _authService.registerDeviceToken();
+      _status = (_token != null && _token!.isNotEmpty)
+          ? AuthStatus.authenticated
+          : AuthStatus.unauthenticated;
+
+      if (_status == AuthStatus.authenticated) {
+        await _authService.registerDeviceToken();
+      }
+
+      notifyListeners();
+
+      return result;
+    } finally {
+      _setLoading(false);
     }
-
-    _setLoading(false);
-    return result;
   }
 
   Future<void> setRememberMePreference(bool value) async {

@@ -63,6 +63,7 @@ class _AdminReviewsPageState extends State<AdminReviewsPage>
         final data = jsonDecode(res.body);
         setState(() {
           _reviews = data['data'] ?? [];
+          print(_reviews);
           _loading = false;
         });
         _listController.forward(from: 0);
@@ -79,72 +80,22 @@ class _AdminReviewsPageState extends State<AdminReviewsPage>
   }
 
   Future<void> _approveReview(String id) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      barrierColor: Colors.black38,
-      builder: (ctx) => _AnimatedDialog(
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text(
-            'Approve Review',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              color: AppColors.deepBlue,
-            ),
-          ),
-          content: const Text(
-            'Are you sure you want to approve this review?',
-            style: TextStyle(color: AppColors.blueGray),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(color: AppColors.blueGray),
-              ),
-            ),
-            _TapScaleWidget(
-              onTap: () => Navigator.pop(ctx, true),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.green,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Text(
-                  'Approve',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (confirm != true) return;
-
     try {
       final token = await AuthService().getToken();
+
       final res = await http.put(
         Uri.parse('${AppConfig.baseUrl}/reviews/admin/approve/$id'),
+
         headers: {
           'Content-Type': 'application/json',
+
           'Authorization': 'Bearer $token',
         },
       );
 
       if (res.statusCode == 200) {
         _showToast('Review approved successfully');
+
         await _loadReviews();
       } else {
         _showToast('Failed to approve review', isError: true);
@@ -288,7 +239,7 @@ class _AdminReviewsPageState extends State<AdminReviewsPage>
     try {
       final token = await AuthService().getToken();
       final res = await http.delete(
-        Uri.parse('${AppConfig.baseUrl}/reviews/admin/$id'),
+        Uri.parse('${AppConfig.baseUrl}/reviews/admin/delete/$id'),
         headers: {'Authorization': 'Bearer $token'},
       );
 
@@ -377,12 +328,22 @@ class _AdminReviewsPageState extends State<AdminReviewsPage>
   }
 
   double get _averageRating {
-    final approvedReviews = _reviews.where((r) => r['status'] == 'approved');
-    if (approvedReviews.isEmpty) return 0;
-    final sum = approvedReviews.fold<double>(
-      0,
-      (sum, r) => sum + (r['rating'] ?? 0),
-    );
+    final approvedReviews = _reviews
+        .where((r) => r['status'] == 'approved')
+        .toList();
+
+    if (approvedReviews.isEmpty) {
+      return 0;
+    }
+
+    double sum = 0;
+
+    for (var review in approvedReviews) {
+      final rating = double.tryParse(review['rating'].toString()) ?? 0;
+
+      sum += rating;
+    }
+
     return sum / approvedReviews.length;
   }
 
@@ -818,7 +779,10 @@ class _AdminReviewsPageState extends State<AdminReviewsPage>
                           radius: 22,
                           backgroundColor: AppColors.babyBlueLight,
                           child: Text(
-                            (review['userName'] ?? 'U')[0].toUpperCase(),
+                            ((review['userName'] ?? '').toString().isNotEmpty
+                                    ? review['userName'][0]
+                                    : 'U')
+                                .toUpperCase(),
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -888,7 +852,11 @@ class _AdminReviewsPageState extends State<AdminReviewsPage>
                     Row(
                       children: List.generate(5, (starIndex) {
                         return Icon(
-                          starIndex < (review['rating'] ?? 0)
+                          starIndex <
+                                  (double.tryParse(
+                                        review['rating'].toString(),
+                                      ) ??
+                                      0)
                               ? Icons.star_rounded
                               : Icons.star_border_rounded,
                           size: 18,

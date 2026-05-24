@@ -109,7 +109,6 @@ class _AdminReportsPageState extends State<AdminReportsPage>
         'deliveredOrders': 0,
         'cancelledOrders': 0,
         'topChefs': [],
-        'popularMeals': [],
       };
       _loading = false;
     });
@@ -379,10 +378,6 @@ class _AdminReportsPageState extends State<AdminReportsPage>
                           _buildOrdersCard(),
                           const SizedBox(height: 14),
                           _buildTopChefsCard(),
-                          const SizedBox(height: 14),
-                          _buildPopularMealsCard(),
-                          const SizedBox(height: 14),
-                          _buildInfoNote(),
                         ],
                       ),
                     ),
@@ -479,73 +474,6 @@ class _AdminReportsPageState extends State<AdminReportsPage>
                 color: _rankColor(i),
               );
             }).toList(),
-    );
-  }
-
-  Widget _buildPopularMealsCard() {
-    final meals = _reports['popularMeals'] as List? ?? [];
-
-    return _ReportCard(
-      title: 'Popular Meals',
-      icon: Icons.fastfood_rounded,
-      color: Colors.purple,
-      periodLabel: _getPeriodLabel(),
-      children: meals.isEmpty
-          ? [_buildEmptySection('No meal data available yet')]
-          : meals.asMap().entries.map((e) {
-              final i = e.key;
-              final meal = e.value;
-              return _buildTopItem(
-                rank: i + 1,
-                name: meal['name'] ?? 'Unknown',
-                subtitle: '${meal['ordersCount'] ?? 0} orders',
-                trailing: _formatCurrency((meal['revenue'] ?? 0).toDouble()),
-                color: _rankColor(i),
-                icon: Icons.restaurant_rounded,
-              );
-            }).toList(),
-    );
-  }
-
-  Widget _buildInfoNote() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.babyBlueLight,
-            AppColors.babyBlue.withOpacity(0.4),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: AppColors.lightSky.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.royalBlue.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.info_outline_rounded,
-              size: 16,
-              color: AppColors.royalBlue,
-            ),
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              'Some data will appear after full API integration: Orders, Revenue, Top Chefs, Popular Meals.',
-              style: TextStyle(fontSize: 11, color: AppColors.blueGray),
-            ),
-          ),
-        ],
-      ),
     );
   }
 

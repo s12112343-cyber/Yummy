@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/services/auth_service.dart';
+import 'BannerRequestsPage.dart';
 
 class AdminBannersPage extends StatefulWidget {
   const AdminBannersPage({super.key});
@@ -420,7 +421,52 @@ class _AdminBannersPageState extends State<AdminBannersPage>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF2F4F7),
+      floatingActionButton: _TapScaleButton(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const BannerRequestsPage()),
+          );
+        },
 
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFFF9800), Color(0xFFFFB74D)],
+            ),
+
+            borderRadius: BorderRadius.circular(18),
+
+            boxShadow: [
+              BoxShadow(
+                color: Colors.orange.withOpacity(0.35),
+                blurRadius: 14,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+
+            children: [
+              Icon(Icons.campaign_rounded, color: Colors.white),
+
+              SizedBox(width: 8),
+
+              Text(
+                'Requests',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
       body: SafeArea(
         child: GestureDetector(
           onTap: () => FocusScope.of(context).unfocus(), // 🔥 إخفاء الكيبورد
@@ -477,10 +523,12 @@ class _AdminBannersPageState extends State<AdminBannersPage>
   Widget _buildHeader() {
     return Row(
       children: [
+        /// 🔵 ADD BANNER
         Expanded(
           child: _TapScaleButton(
             onTap: () {
               FocusScope.of(context).unfocus();
+
               if (_showForm) {
                 _formController.reverse().then((_) {
                   setState(() {
@@ -507,39 +555,23 @@ class _AdminBannersPageState extends State<AdminBannersPage>
                       ),
                 color: _showForm ? AppColors.babyBlueLight : null,
                 borderRadius: BorderRadius.circular(14),
-                boxShadow: _showForm
-                    ? null
-                    : [
-                        BoxShadow(
-                          color: AppColors.royalBlue.withOpacity(0.3),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
-                    child: Icon(
-                      _showForm ? Icons.close : Icons.add_rounded,
-                      key: ValueKey(_showForm),
-                      size: 20,
-                      color: _showForm ? AppColors.blueGray : Colors.white,
-                    ),
+                  Icon(
+                    _showForm ? Icons.close : Icons.add_rounded,
+                    size: 20,
+                    color: _showForm ? AppColors.blueGray : Colors.white,
                   ),
+
                   const SizedBox(width: 8),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
-                    child: Text(
-                      _showForm ? 'Cancel' : 'Add Banner',
-                      key: ValueKey(_showForm),
-                      style: TextStyle(
-                        color: _showForm ? AppColors.blueGray : Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
+
+                  Text(
+                    _showForm ? 'Cancel' : 'Add Banner',
+                    style: TextStyle(
+                      color: _showForm ? AppColors.blueGray : Colors.white,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -547,30 +579,73 @@ class _AdminBannersPageState extends State<AdminBannersPage>
             ),
           ),
         ),
-        if (_banners.isNotEmpty) ...[
-          const SizedBox(width: 12),
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: 1),
-            duration: const Duration(milliseconds: 400),
-            builder: (context, value, child) => Transform.scale(
-              scale: value,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
+
+        const SizedBox(width: 12),
+
+        /// 🔥 BANNER REQUESTS BUTTON
+        _TapScaleButton(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BannerRequestsPage()),
+            );
+          },
+
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFF9800), Color(0xFFFFB74D)],
+              ),
+
+              borderRadius: BorderRadius.circular(14),
+
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.orange.withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
                 ),
-                decoration: BoxDecoration(
-                  color: AppColors.babyBlueLight,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '${_banners.length}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: AppColors.royalBlue,
-                    fontWeight: FontWeight.w700,
+              ],
+            ),
+
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.campaign_rounded, color: Colors.white, size: 20),
+
+                SizedBox(width: 8),
+
+                Text(
+                  'Requests',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
+              ],
+            ),
+          ),
+        ),
+
+        if (_banners.isNotEmpty) ...[
+          const SizedBox(width: 12),
+
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+
+            decoration: BoxDecoration(
+              color: AppColors.babyBlueLight,
+              borderRadius: BorderRadius.circular(20),
+            ),
+
+            child: Text(
+              '${_banners.length}',
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.royalBlue,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),

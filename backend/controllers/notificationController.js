@@ -1,8 +1,24 @@
 const Notification = require("../models/Notification");
 
+const getAuthUserId = (req) => {
+  return (
+    req.user?.userId ||
+    req.user?.id ||
+    req.user?._id
+  )?.toString();
+};
+
 exports.getMyNotifications = async (req, res) => {
   try {
-    const userId = req.user.userId.toString();
+    const userId = getAuthUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
     const unreadOnly = req.query.unreadOnly === "true";
 
     const filter = {
@@ -14,23 +30,44 @@ exports.getMyNotifications = async (req, res) => {
     }
 
     const [notifications, unreadCount] = await Promise.all([
-      Notification.find(filter).sort({ createdAt: -1 }).lean(),
-      Notification.countDocuments({ recipientId: userId, isRead: false }),
+      Notification.find(filter)
+        .sort({ createdAt: -1 })
+        .lean(),
+
+      Notification.countDocuments({
+        recipientId: userId,
+        isRead: false,
+      }),
     ]);
 
     res.status(200).json({
+      success: true,
       notifications,
       unreadCount,
     });
   } catch (error) {
-    console.error("Get notifications error:", error);
-    res.status(500).json({ message: "Failed to load notifications" });
+    console.error("GET NOTIFICATIONS ERROR =>", error);
+
+    res.status(500).json({
+      success: false,
+      message:
+        error.message ||
+        "Failed to load notifications",
+    });
   }
 };
 
 exports.markNotificationAsRead = async (req, res) => {
   try {
-    const userId = req.user.userId.toString();
+    const userId = getAuthUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
     const { notificationId } = req.params;
 
     const notification = await Notification.findOneAndUpdate(
@@ -42,23 +79,44 @@ exports.markNotificationAsRead = async (req, res) => {
         isRead: true,
         readAt: new Date(),
       },
-      { new: true }
+      {
+        new: true,
+      }
     );
 
     if (!notification) {
-      return res.status(404).json({ message: "Notification not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Notification not found",
+      });
     }
 
-    res.status(200).json({ notification });
+    res.status(200).json({
+      success: true,
+      notification,
+    });
   } catch (error) {
-    console.error("Mark notification read error:", error);
-    res.status(500).json({ message: "Failed to update notification" });
+    console.error("MARK READ ERROR =>", error);
+
+    res.status(500).json({
+      success: false,
+      message:
+        error.message ||
+        "Failed to update notification",
+    });
   }
 };
 
 exports.markAllNotificationsAsRead = async (req, res) => {
   try {
-    const userId = req.user.userId.toString();
+    const userId = getAuthUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
 
     await Notification.updateMany(
       {
@@ -71,9 +129,18 @@ exports.markAllNotificationsAsRead = async (req, res) => {
       }
     );
 
-    res.status(200).json({ message: "Notifications marked as read" });
+    res.status(200).json({
+      success: true,
+      message: "Notifications marked as read",
+    });
   } catch (error) {
-    console.error("Mark all notifications error:", error);
-    res.status(500).json({ message: "Failed to update notifications" });
+    console.error("MARK ALL ERROR =>", error);
+
+    res.status(500).json({
+      success: false,
+      message:
+        error.message ||
+        "Failed to update notifications",
+    });
   }
 };

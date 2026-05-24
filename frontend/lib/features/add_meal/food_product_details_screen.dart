@@ -5,21 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 
-import '../api/edamam_api_service.dart';
 import '../../core/providers/user_provider.dart';
 import '../../core/services/meal_restrictions_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../shared/back_button_widget.dart';
 import 'food_search_panel.dart';
-
-final EdamamApiService _edamamApiService = EdamamApiService();
-
-final Map<String, List<UsdaFoodItem>> _edamamQueryCache =
-    <String, List<UsdaFoodItem>>{};
-
-String _cacheKeyForQuery(String query) {
-  return query.trim().toLowerCase();
-}
 
 class FoodProductDetailsScreen extends StatefulWidget {
   final UsdaFoodItem item;
@@ -53,9 +43,6 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
   late final List<EditableIngredient> _ingredients;
   late final TextEditingController _portionGramsController;
   double _portionGrams = 100;
-  String _portionLabel = '1 piece';
-  String? _ingredientSearchErrorMessage;
-  late FoodCategory _foodCategory;
   int _wholePortionCount = 1;
   double _fractionPortion = 0;
   String _selectedPortionUnit = 'piece';
@@ -131,7 +118,7 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
               borderRadius: BorderRadius.circular(28),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.16),
+                  color: Colors.black.withValues(alpha: 0.16),
                   blurRadius: 28,
                   offset: const Offset(0, 18),
                 ),
@@ -169,7 +156,7 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
                       : 'This dish may not be suitable for one of your medical conditions.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: AppColors.navy.withOpacity(0.78),
+                    color: AppColors.navy.withValues(alpha: 0.78),
                     fontSize: 13.5,
                     fontWeight: FontWeight.w600,
                     height: 1.35,
@@ -400,14 +387,6 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
     _ingredients = _seedIngredients(widget.item.ingredients);
     _portionGramsController = TextEditingController(text: '100');
 
-    // Classify the food and select initial unit
-    _foodCategory = FoodCategoryClassifier.classify(
-      widget.item.name,
-      dataType: widget.item.dataType,
-      brand: widget.item.brand,
-      ingredients: widget.item.ingredients,
-    );
-
     final availableUnits = FoodCategoryClassifier.getUnitsForFood(
       widget.item.name,
       dataType: widget.item.dataType,
@@ -448,12 +427,6 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
         .where((part) => part.isNotEmpty)
         .map((name) => EditableIngredient(name: name))
         .toList(growable: true);
-  }
-
-  String _grams(double value) => '${value.toStringAsFixed(0)} g';
-
-  String _portionDisplayText() {
-    return '${_portionReadableQuantity()} ${_portionUnitLabel(_selectedPortionUnit)} (${_portionGrams.toStringAsFixed(0)} g)';
   }
 
   String _portionMainText() {
@@ -566,8 +539,6 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
       _syncPortionQuantityFromGrams();
     }
 
-    _portionLabel =
-        '${_portionReadableQuantity()} ${_portionUnitLabel(_selectedPortionUnit)}';
     _portionGramsController.text = _portionGrams.toStringAsFixed(0);
   }
 
@@ -778,8 +749,8 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
                                       horizontal: 4,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: AppColors.lightBlue.withOpacity(
-                                        0.12,
+                                      color: AppColors.lightBlue.withValues(
+                                        alpha: 0.12,
                                       ),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
@@ -904,26 +875,6 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
         _customIngredientsNutrientTotal((ingredient) => ingredient.fat);
   }
 
-  void _updatePortionGrams(String value) {
-    final normalized = value.trim().replaceAll(',', '.');
-    final match = RegExp(r'\d+(\.\d+)?').firstMatch(normalized);
-    final parsed = match == null ? null : double.tryParse(match.group(0)!);
-
-    if (parsed == null || parsed <= 0) return;
-
-    setState(() {
-      _portionGrams = parsed;
-    });
-  }
-
-  String _weightText(UsdaFoodItem item) {
-    final value = item.weight;
-    if (value == null || value <= 0) return 'N/A';
-    final unit = (item.weightUnit ?? '').trim();
-    if (unit.isEmpty) return '${value.toStringAsFixed(0)} g';
-    return '${value.toStringAsFixed(0)} $unit';
-  }
-
   Widget _macroChip(String title, String value, Color bg) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
@@ -959,7 +910,7 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.lightBlue.withOpacity(0.30)),
+        border: Border.all(color: AppColors.lightBlue.withValues(alpha: 0.30)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -979,7 +930,7 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
               Text(
                 '${value.toStringAsFixed(0)} / ${target.toStringAsFixed(0)} $unit',
                 style: TextStyle(
-                  color: AppColors.navy.withOpacity(0.72),
+                  color: AppColors.navy.withValues(alpha: 0.72),
                   fontWeight: FontWeight.w700,
                   fontSize: 12,
                 ),
@@ -1005,7 +956,7 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
           Text(
             '$percentage% of daily need covered',
             style: TextStyle(
-              color: AppColors.navy.withOpacity(0.58),
+              color: AppColors.navy.withValues(alpha: 0.58),
               fontSize: 11.5,
               fontWeight: FontWeight.w600,
             ),
@@ -1015,35 +966,11 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
     );
   }
 
-  double _findNutrientValue(String keyword) {
-    for (final nutrient in widget.item.nutrients) {
-      final name = nutrient.name.toLowerCase();
-      if (name.contains(keyword.toLowerCase())) {
-        return _scaledValue(nutrient.value);
-      }
-    }
-    return 0;
-  }
-
   double? _parseIngredientWeight(String rawWeight) {
     final normalized = rawWeight.trim().replaceAll(',', '.');
     final match = RegExp(r'\d+(\.\d+)?').firstMatch(normalized);
     if (match == null) return null;
     return double.tryParse(match.group(0)!);
-  }
-
-  String _formatIngredientWeight(String rawWeight) {
-    if (rawWeight.trim().isEmpty) return 'Weight: N/A';
-
-    // إذا كان الوزن يحتوي على وحدة بالفعل (مثل "123 g")
-    if (rawWeight.contains(RegExp(r'[a-zA-Z]'))) {
-      return 'Weight: $rawWeight';
-    }
-
-    // وإلا، parse الرقم وأضف الوحدة
-    final parsed = _parseIngredientWeight(rawWeight);
-    if (parsed == null || parsed <= 0) return 'Weight: N/A';
-    return 'Weight: ${parsed.toStringAsFixed(0)} g';
   }
 
   String _formatIngredientWeightShort(String rawWeight) {
@@ -1085,10 +1012,12 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
           decoration: BoxDecoration(
             color: AppColors.white,
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: AppColors.lightBlue.withOpacity(0.75)),
+            border: Border.all(
+              color: AppColors.lightBlue.withValues(alpha: 0.75),
+            ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.lightBlue.withOpacity(0.28),
+                color: AppColors.lightBlue.withValues(alpha: 0.28),
                 blurRadius: 14,
                 spreadRadius: 1,
                 offset: const Offset(0, 2),
@@ -1114,7 +1043,7 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
               Container(
                 width: 1,
                 height: 24,
-                color: AppColors.lightBlue.withOpacity(0.45),
+                color: AppColors.lightBlue.withValues(alpha: 0.45),
               ),
               Expanded(
                 child: Center(
@@ -1124,7 +1053,7 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: AppColors.navy.withOpacity(0.86),
+                      color: AppColors.navy.withValues(alpha: 0.86),
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
                     ),
@@ -1135,7 +1064,7 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
               Icon(
                 Icons.keyboard_arrow_down_rounded,
                 size: 20,
-                color: AppColors.navy.withOpacity(0.7),
+                color: AppColors.navy.withValues(alpha: 0.7),
               ),
               const SizedBox(width: 4),
             ],
@@ -1179,7 +1108,7 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
                 size: 40,
               ),
             ),
-          Container(color: Colors.black.withOpacity(0.24)),
+          Container(color: Colors.black.withValues(alpha: 0.24)),
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
@@ -1199,46 +1128,6 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
         ],
       ),
     );
-  }
-
-  Future<List<UsdaFoodItem>> _searchIngredientsFromApi(String query) async {
-    final key = _cacheKeyForQuery(query);
-
-    final remainingLimit = _edamamApiService.remainingRateLimitDuration();
-    if (remainingLimit > Duration.zero) {
-      _ingredientSearchErrorMessage =
-          'Rate limit reached. Please wait ${remainingLimit.inSeconds}s and try again.';
-      return const [];
-    }
-
-    final cached = _edamamQueryCache[key];
-    if (cached != null) {
-      _ingredientSearchErrorMessage = null;
-      return cached;
-    }
-
-    final trimmed = query.trim();
-    if (trimmed.length < 2 || !_edamamApiService.hasCredentials) {
-      return const [];
-    }
-
-    final result = await _edamamApiService.searchRecipes(trimmed);
-    if (!result.isSuccess) {
-      _ingredientSearchErrorMessage = result.errorMessage;
-      return const [];
-    }
-
-    try {
-      final parsed = result.hits
-          .map(UsdaFoodItem.fromApi)
-          .toList(growable: false);
-
-      _edamamQueryCache[key] = parsed;
-      _ingredientSearchErrorMessage = null;
-      return parsed;
-    } catch (_) {
-      return const [];
-    }
   }
 
   Future<void> _showAddIngredientDialog() async {
@@ -1315,20 +1204,6 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
           ),
         );
       },
-    );
-  }
-
-  Widget _nutritionGroupTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        title,
-        style: const TextStyle(
-          color: AppColors.deepBlue,
-          fontSize: 14,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
     );
   }
 
@@ -1410,7 +1285,7 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
         Text(
           'Base ${baseWeight.toStringAsFixed(0)} g + Ingredients ${addedIngredientsWeight.toStringAsFixed(0)} g = ${totalWeight.toStringAsFixed(0)} g.',
           style: TextStyle(
-            color: AppColors.navy.withOpacity(0.58),
+            color: AppColors.navy.withValues(alpha: 0.58),
             fontSize: 11.5,
             fontWeight: FontWeight.w500,
           ),
@@ -1442,7 +1317,7 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
         Text(
           'Ingredients',
           style: TextStyle(
-            color: AppColors.navy.withOpacity(0.85),
+            color: AppColors.navy.withValues(alpha: 0.85),
             fontSize: 13,
             fontWeight: FontWeight.w700,
           ),
@@ -1452,7 +1327,7 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
           Text(
             'No ingredients yet.',
             style: TextStyle(
-              color: AppColors.navy.withOpacity(0.65),
+              color: AppColors.navy.withValues(alpha: 0.65),
               fontWeight: FontWeight.w500,
             ),
           )
@@ -1468,7 +1343,7 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
                 color: AppColors.white,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: AppColors.lightBlue.withOpacity(0.30),
+                  color: AppColors.lightBlue.withValues(alpha: 0.30),
                 ),
               ),
               child: Row(
@@ -1489,7 +1364,7 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
                         Text(
                           '${ingredientCalories.toStringAsFixed(0)} Cal • ${_formatIngredientWeightShort(ingredient.weight)}',
                           style: TextStyle(
-                            color: AppColors.navy.withOpacity(0.62),
+                            color: AppColors.navy.withValues(alpha: 0.62),
                             fontSize: 11,
                             fontWeight: FontWeight.w500,
                           ),
@@ -1576,7 +1451,7 @@ class _FoodProductDetailsScreenState extends State<FoodProductDetailsScreen> {
                 decoration: BoxDecoration(
                   color: selected
                       ? AppColors.deepBlue
-                      : AppColors.lightBlue.withOpacity(0.35),
+                      : AppColors.lightBlue.withValues(alpha: 0.35),
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),

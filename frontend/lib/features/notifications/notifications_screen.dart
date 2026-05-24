@@ -86,10 +86,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     switch (type) {
       case 'like':
         return Icons.favorite_rounded;
+
       case 'comment':
         return Icons.mode_comment_rounded;
+
       case 'follow':
         return Icons.person_add_alt_rounded;
+
+      case 'order_status':
+        return Icons.delivery_dining_rounded;
+
       default:
         return Icons.notifications_rounded;
     }
@@ -99,10 +105,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     switch (type) {
       case 'like':
         return const Color(0xFFE65B7A);
+
       case 'comment':
         return const Color(0xFF4F8DF7);
+
       case 'follow':
         return const Color(0xFF2DBE7A);
+
+      case 'order_status':
+        return Colors.orange;
+
       default:
         return AppColors.deepBlue;
     }

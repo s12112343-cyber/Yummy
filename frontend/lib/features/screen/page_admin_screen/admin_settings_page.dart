@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/services/auth_service.dart';
+import 'admin_notification_requests_page.dart';
 
 class AdminSettingsPage extends StatefulWidget {
   const AdminSettingsPage({super.key});
@@ -17,8 +18,6 @@ class AdminSettingsPage extends StatefulWidget {
 class _AdminSettingsPageState extends State<AdminSettingsPage> {
   Map<String, dynamic> _admin = {};
   bool _loading = true;
-  File? _pickedImage;
-  bool _uploadingImage = false;
 
   // Controllers — بتنتقل للصفحات الفرعية
   final _nameCtrl = TextEditingController();
@@ -76,48 +75,6 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
     }
   }
 
-  // رفع الصورة
-  Future<void> _pickImage() async {
-    final picked = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 80,
-      maxWidth: 800,
-    );
-    if (picked == null) return;
-    setState(() {
-      _pickedImage = File(picked.path);
-      _uploadingImage = true;
-    });
-    try {
-      final t = await AuthService().getToken();
-      final req = http.MultipartRequest(
-        'POST',
-        Uri.parse('${AppConfig.baseUrl}/users/upload-avatar'),
-      );
-      req.headers['Authorization'] = 'Bearer $t';
-      req.files.add(await http.MultipartFile.fromPath('avatar', picked.path));
-      final resp = await req.send();
-      final body = await resp.stream.bytesToString();
-      if (resp.statusCode == 200) {
-        final d = jsonDecode(body);
-        setState(() {
-          _admin['profileImage'] =
-              d['imageUrl'] ?? d['url'] ?? _admin['profileImage'];
-          _pickedImage = null;
-        });
-        _toast('Photo updated!');
-      } else {
-        _toast('Upload failed', error: true);
-        setState(() => _pickedImage = null);
-      }
-    } catch (_) {
-      _toast('Upload error', error: true);
-      setState(() => _pickedImage = null);
-    } finally {
-      if (mounted) setState(() => _uploadingImage = false);
-    }
-  }
-
   void _toast(String msg, {bool error = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -142,49 +99,231 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
     );
   }
 
-  Future<void> _logout() async {
-    final ok = await showDialog<bool>(
+  Future<void> _showChangeEmailDialog() async {
+    final emailController = TextEditingController(text: _emailCtrl.text);
+
+    await showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: _white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text(
-          'Logout',
-          style: TextStyle(fontWeight: FontWeight.w700, color: _text),
-        ),
-        content: const Text(
-          'Are you sure you want to sign out?',
-          style: TextStyle(color: _sub),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: _sub)),
+
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _red,
-              foregroundColor: _white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+
+          title: const Text(
+            'Change Email',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+
+          content: TextField(
+            controller: emailController,
+
+            keyboardType: TextInputType.emailAddress,
+
+            decoration: InputDecoration(
+              hintText: 'Enter new email',
+
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
-            child: const Text('Logout'),
           ),
-        ],
-      ),
+
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+
+              child: const Text('Cancel'),
+            ),
+
+            ElevatedButton(
+              onPressed: () async {
+                try {
+                  final token = await AuthService().getToken();
+
+                  final response = await http.patch(
+                    Uri.parse('${AppConfig.baseUrl}/auth/change-email'),
+
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': 'Bearer $token',
+                    },
+
+                    body: jsonEncode({'email': emailController.text.trim()}),
+                  );
+
+                  if (response.statusCode == 200) {
+                    setState(() {
+                      _emailCtrl.text = emailController.text.trim();
+                    });
+
+                    Navigator.pop(context);
+
+                    _toast('Email updated successfully');
+                  } else {
+                    _toast('Failed to update email', error: true);
+                  }
+                } catch (e) {
+                  _toast('Error updating email', error: true);
+                }
+              },
+
+              style: ElevatedButton.styleFrom(backgroundColor: _blue),
+
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
     );
-    if (ok == true && mounted) {
-      final p = await SharedPreferences.getInstance();
-      await p.clear();
-      if (mounted) {
-        Navigator.pushNamedAndRemoveUntil(context, '/', (r) => false);
-      }
-    }
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
+  Future<void> _showChangePasswordDialog() async {
+    final currentPasswordController = TextEditingController();
+
+    final newPasswordController = TextEditingController();
+
+    final confirmPasswordController = TextEditingController();
+
+    await showDialog(
+      context: context,
+
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+
+          title: const Text(
+            'Change Password',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+
+            children: [
+              TextField(
+                controller: currentPasswordController,
+
+                obscureText: true,
+
+                decoration: InputDecoration(
+                  hintText: 'Current Password',
+
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              TextField(
+                controller: newPasswordController,
+
+                obscureText: true,
+
+                decoration: InputDecoration(
+                  hintText: 'New Password',
+
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              TextField(
+                controller: confirmPasswordController,
+
+                obscureText: true,
+
+                decoration: InputDecoration(
+                  hintText: 'Confirm Password',
+
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+
+              child: const Text('Cancel'),
+            ),
+
+            ElevatedButton(
+              onPressed: () async {
+                if (newPasswordController.text !=
+                    confirmPasswordController.text) {
+                  _toast('Passwords do not match', error: true);
+
+                  return;
+                }
+
+                try {
+                  final token = await AuthService().getToken();
+
+                  final response = await http.patch(
+                    Uri.parse('${AppConfig.baseUrl}/auth/change-password'),
+
+                    headers: {
+                      'Content-Type': 'application/json',
+
+                      'Authorization': 'Bearer $token',
+                    },
+
+                    body: jsonEncode({
+                      'currentPassword': currentPasswordController.text,
+
+                      'newPassword': newPasswordController.text,
+                    }),
+                  );
+
+                  print(response.body);
+                  print(response.statusCode);
+
+                  if (response.statusCode == 200) {
+                    Navigator.pop(context);
+
+                    _toast('Password updated successfully');
+                  } else {
+                    final data = jsonDecode(response.body);
+
+                    _toast(
+                      data['message'] ?? 'Failed to update password',
+
+                      error: true,
+                    );
+                  }
+                } catch (e) {
+                  print(e);
+
+                  _toast('Error updating password', error: true);
+                }
+              },
+
+              style: ElevatedButton.styleFrom(backgroundColor: _blue),
+
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -196,407 +335,59 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
       );
     }
 
-    final name = _admin['name'] ?? 'Admin';
-    final email = _admin['email'] ?? '';
-    final img = _admin['profileImage'];
-
     return Scaffold(
       backgroundColor: _bg,
+
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
+
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+
             children: [
-              // ── Top bar: avatar + name + gear ──────────────────────────────
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Row(
-                  children: [
-                    // Avatar
-                    Stack(
-                      alignment: Alignment.bottomRight,
-                      children: [
-                        GestureDetector(
-                          onTap: _uploadingImage ? null : _pickImage,
-                          child: CircleAvatar(
-                            radius: 26,
-                            backgroundColor: const Color(0xFFE0F1FF),
-                            backgroundImage: _pickedImage != null
-                                ? FileImage(_pickedImage!) as ImageProvider
-                                : (img != null && img.isNotEmpty
-                                      ? NetworkImage(img)
-                                      : null),
-                            child:
-                                (_pickedImage == null &&
-                                    (img == null || img.isEmpty))
-                                ? Text(
-                                    name.isNotEmpty
-                                        ? name[0].toUpperCase()
-                                        : 'A',
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w700,
-                                      color: _blue,
-                                    ),
-                                  )
-                                : null,
-                          ),
-                        ),
-                        Container(
-                          width: 18,
-                          height: 18,
-                          decoration: BoxDecoration(
-                            color: _blue,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: _white, width: 1.5),
-                          ),
-                          child: _uploadingImage
-                              ? const Padding(
-                                  padding: EdgeInsets.all(2),
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 1.5,
-                                    color: _white,
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.camera_alt_rounded,
-                                  color: _white,
-                                  size: 10,
-                                ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: _text,
-                            ),
-                          ),
-                          if (email.isNotEmpty)
-                            Text(
-                              email,
-                              style: const TextStyle(fontSize: 11, color: _sub),
-                            ),
-                        ],
-                      ),
-                    ),
-                    // Gear icon (decorative)
-                    Container(
-                      padding: const EdgeInsets.all(9),
-                      decoration: BoxDecoration(
-                        color: _white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: _divide),
-                      ),
-                      child: const Icon(
-                        Icons.settings_rounded,
-                        color: _sub,
-                        size: 20,
-                      ),
-                    ),
-                  ],
-                ),
+              // ── CHANGE EMAIL ─────────────────────
+              _card(
+                icon: Icons.email_rounded,
+
+                title: 'Change Email',
+
+                subtitle: 'Update your account email',
+
+                onTap: () {
+                  _showChangeEmailDialog();
+                },
               ),
 
-              // ── Page title ─────────────────────────────────────────────────
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 28, 16, 4),
-                child: Text(
-                  'Admin Settings',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                    color: _text,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
-                child: Text(
-                  'Manage your fleet authority and system preferences.',
-                  style: TextStyle(fontSize: 13, color: _sub, height: 1.4),
-                ),
-              ),
+              // ── CHANGE PASSWORD ─────────────────
+              _card(
+                icon: Icons.lock_rounded,
 
-              // ── Section cards ───────────────────────────────────────────────
-              _card(
-                icon: Icons.person_rounded,
-                title: 'Account',
-                subtitle: 'Name, Email, Phone',
-                onTap: () => Navigator.push(
-                  context,
-                  _route(
-                    _AccountPage(
-                      admin: _admin,
-                      nameCtrl: _nameCtrl,
-                      emailCtrl: _emailCtrl,
-                      phoneCtrl: _phoneCtrl,
-                      onSaved: (updated) => setState(() => _admin = updated),
-                    ),
-                  ),
-                ),
-              ),
-              _card(
-                icon: Icons.shield_rounded,
-                title: 'Security',
-                subtitle: 'Password, 2FA, Sessions',
-                onTap: () =>
-                    Navigator.push(context, _route(const _SecurityPage())),
+                title: 'Change Password',
+
+                subtitle: 'Update your account password',
+
+                onTap: () {
+                  _showChangePasswordDialog();
+                },
               ),
               _card(
                 icon: Icons.notifications_rounded,
-                title: 'Notifications',
-                subtitle: 'Email, Push, Dispatch Alerts',
-                onTap: () =>
-                    Navigator.push(context, _route(const _NotificationsPage())),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
 
-                child: Material(
-                  color: _white,
+                title: 'Notification Requests',
 
-                  borderRadius: BorderRadius.circular(16),
+                subtitle: 'Manage notification requests',
 
-                  child: InkWell(
-                    onTap: () {
-                      // 🔥 action
-                    },
-
-                    borderRadius: BorderRadius.circular(16),
-
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 16,
-                      ),
-
-                      child: Row(
-                        children: [
-                          // 🔥 ICON
-                          Container(
-                            width: 48,
-                            height: 48,
-
-                            decoration: const BoxDecoration(
-                              color: _blue,
-                              shape: BoxShape.circle,
-                            ),
-
-                            child: const Icon(
-                              Icons.restaurant_menu_rounded,
-                              color: _white,
-                              size: 24,
-                            ),
-                          ),
-
-                          const SizedBox(width: 16),
-
-                          // 🔥 TEXT
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-
-                              children: [
-                                Text(
-                                  'Application Icon',
-
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: _text,
-                                  ),
-                                ),
-
-                                SizedBox(height: 3),
-
-                                Text(
-                                  'Manage app branding and logo',
-
-                                  style: TextStyle(fontSize: 13, color: _sub),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // 🔥 ARROW
-                          const Icon(
-                            Icons.chevron_right_rounded,
-                            color: _sub,
-                            size: 24,
-                          ),
-                        ],
-                      ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AdminNotificationRequestsPage(),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
-              _card(
-                icon: Icons.settings_rounded,
-                title: 'System',
-                subtitle: 'Language, Dark Mode, Units',
-                onTap: () =>
-                    Navigator.push(context, _route(const _SystemPage())),
-              ),
-
-              const SizedBox(height: 16),
-
-              // ── System Health ───────────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: _navy,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'System Health',
-                              style: TextStyle(
-                                color: _white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Last diagnostic: 42m ago',
-                              style: TextStyle(
-                                color: _white.withOpacity(0.55),
-                                fontSize: 12,
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-                            Row(
-                              children: [
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF4CAF50),
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  'ALL SYSTEMS OPERATIONAL',
-                                  style: TextStyle(
-                                    color: Color(0xFF4CAF50),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(
-                        Icons.bar_chart_rounded,
-                        color: _white.withOpacity(0.12),
-                        size: 72,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // ── Termination label ───────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 16, 8),
-                child: Text(
-                  'TERMINATION',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: _sub,
-                    letterSpacing: 1.3,
-                  ),
-                ),
-              ),
-
-              // ── Logout tile ─────────────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: InkWell(
-                  onTap: _logout,
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 16,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFDECEC),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: _red.withOpacity(0.15)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 46,
-                          height: 46,
-                          decoration: const BoxDecoration(
-                            color: _red,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.logout_rounded,
-                            color: _white,
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Logout',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: _red,
-                                ),
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                'Securely end your session',
-                                style: TextStyle(fontSize: 12, color: _sub),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Icon(
-                          Icons.arrow_forward_rounded,
-                          color: _red.withOpacity(0.7),
-                          size: 20,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 40),
+              const SizedBox(height: 28),
             ],
           ),
         ),

@@ -107,7 +107,7 @@ class _AddIngredientScreenState extends State<AddIngredientScreen> {
 
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    initialValue: selectedUnit,
+                    value: selectedUnit,
 
                     items: units.map((e) {
                       return DropdownMenuItem(value: e, child: Text(e));

@@ -27,7 +27,7 @@ class _AdminStatsPageState extends State<AdminStatsPage>
   int _orders = 0;
   bool _loading = true;
   String _error = '';
-  final double _revenue = 0;
+  double _revenue = 0;
   List<dynamic> _weeklyOrders = [];
   Map<String, dynamic>? _topChef;
   late AnimationController _staggerController;

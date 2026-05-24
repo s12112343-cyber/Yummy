@@ -521,39 +521,84 @@ class _ChefProfileScreenState extends State<ChefProfileScreen>
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Select rating ⭐')),
                           );
+
                           return;
                         }
+
                         if (commentController.text.trim().isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Write a review')),
                           );
+
                           return;
                         }
-                        setStateDialog(() => isSubmitting = true);
+
+                        setStateDialog(() {
+                          isSubmitting = true;
+                        });
+
                         try {
                           final prefs = await SharedPreferences.getInstance();
+                          final userName = prefs.getString('userName');
+
                           final token = prefs.getString('token');
+
+                          print("TOKEN => $token");
+
                           final response = await http.post(
                             Uri.parse('${AppConfig.baseUrl}/reviews'),
+
                             headers: {
                               'Content-Type': 'application/json',
+
                               'Authorization': 'Bearer $token',
                             },
                             body: jsonEncode({
                               'chefId': widget.chefId,
+
+                              'userName': userName,
+
                               'rating': tempRating,
+
                               'comment': commentController.text.trim(),
                             }),
                           );
+
+                          print("STATUS => ${response.statusCode}");
+
+                          print("BODY => ${response.body}");
+
                           if (response.statusCode == 201) {
                             Navigator.pop(context);
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Review submitted successfully 🔥',
+                                ),
+                              ),
+                            );
+
                             await _loadReviews();
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('FAILED => ${response.body}'),
+                              ),
+                            );
                           }
                         } catch (e) {
-                          print(e);
+                          print("ERROR => $e");
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('ERROR => $e')),
+                          );
                         }
+
                         if (mounted) {
-                          setStateDialog(() => isSubmitting = false);
+                          setStateDialog(() {
+                            isSubmitting = false;
+                          });
                         }
                       },
                 child: isSubmitting
@@ -693,7 +738,7 @@ class _ChefProfileScreenState extends State<ChefProfileScreen>
 
                 fadeOutDuration: Duration.zero,
 
-                errorWidget: (_, _, _) {
+                errorWidget: (_, __, ___) {
                   return Container(color: Colors.grey.shade200);
                 },
               ),

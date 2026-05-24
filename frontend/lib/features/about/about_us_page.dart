@@ -87,9 +87,9 @@ class _AboutUsPageState extends State<AboutUsPage> {
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
-                              AppColors.deepBlue.withOpacity(0.28),
-                              AppColors.deepBlue.withOpacity(0.66),
-                              AppColors.royalBlue.withOpacity(0.76),
+                              AppColors.deepBlue.withValues(alpha: 0.28),
+                              AppColors.deepBlue.withValues(alpha: 0.66),
+                              AppColors.royalBlue.withValues(alpha: 0.76),
                             ],
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
@@ -119,7 +119,7 @@ class _AboutUsPageState extends State<AboutUsPage> {
                               'A simple, polished space for tracking meals, discovering recipes, and staying on top of your health goals.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.92),
+                                color: Colors.white.withValues(alpha: 0.92),
                                 fontSize: 15,
                                 height: 1.45,
                                 fontWeight: FontWeight.w500,
@@ -144,7 +144,7 @@ class _AboutUsPageState extends State<AboutUsPage> {
                         borderRadius: BorderRadius.circular(28),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.07),
+                            color: Colors.black.withValues(alpha: 0.07),
                             blurRadius: 22,
                             offset: const Offset(0, 10),
                           ),
@@ -293,7 +293,7 @@ class _AboutUsPageState extends State<AboutUsPage> {
                   child: Column(
                     children: [
                       Divider(
-                        color: AppColors.deepBlue.withOpacity(0.12),
+                        color: AppColors.deepBlue.withValues(alpha: 0.12),
                         thickness: 1,
                         height: 1,
                       ),
@@ -368,10 +368,10 @@ class _AboutFeatureCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.deepBlue.withOpacity(0.05)),
+        border: Border.all(color: AppColors.deepBlue.withValues(alpha: 0.05)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.07),
+            color: Colors.black.withValues(alpha: 0.07),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -385,7 +385,7 @@ class _AboutFeatureCard extends StatelessWidget {
             width: 58,
             height: 58,
             decoration: BoxDecoration(
-              color: AppColors.deepBlue.withOpacity(0.08),
+              color: AppColors.deepBlue.withValues(alpha: 0.08),
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
@@ -476,34 +476,8 @@ class _ScrollReveal extends StatelessWidget {
   }
 }
 
-class _WaveClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-    path.lineTo(0, size.height * 0.6);
-    path.quadraticBezierTo(
-      size.width * 0.25,
-      size.height * 0.45,
-      size.width * 0.5,
-      size.height * 0.6,
-    );
-    path.quadraticBezierTo(
-      size.width * 0.75,
-      size.height * 0.75,
-      size.width,
-      size.height * 0.6,
-    );
-    path.lineTo(size.width, 0);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
-}
-
 class _FeedbackCard extends StatefulWidget {
-  const _FeedbackCard({super.key});
+  const _FeedbackCard();
 
   @override
   State<_FeedbackCard> createState() => _FeedbackCardState();
@@ -550,10 +524,9 @@ class _FeedbackCardState extends State<_FeedbackCard> {
     });
 
     try {
-      final token = await AuthService().getToken();
-
       // try to get user info from provider
       final user = context.read<UserProvider>().user;
+      final token = await AuthService().getToken();
       final name =
           user?['name'] as String? ?? await AuthService().getUserName();
 
@@ -649,7 +622,7 @@ class _FeedbackCardState extends State<_FeedbackCard> {
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -680,7 +653,7 @@ class _FeedbackCardState extends State<_FeedbackCard> {
               filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
               child: Container(
                 padding: const EdgeInsets.all(8),
-                color: Colors.white.withOpacity(0.06),
+                color: Colors.white.withValues(alpha: 0.06),
                 child: TextField(
                   controller: _controller,
                   minLines: 3,
@@ -688,7 +661,9 @@ class _FeedbackCardState extends State<_FeedbackCard> {
                   style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
                     hintText: 'Write your feedback...',
-                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.75)),
+                    hintStyle: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.75),
+                    ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -708,7 +683,7 @@ class _FeedbackCardState extends State<_FeedbackCard> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.12),
+                color: Colors.white.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -775,7 +750,7 @@ class _FeatureImageCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(26),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.07),
+            color: Colors.black.withValues(alpha: 0.07),
             blurRadius: 22,
             offset: const Offset(0, 10),
           ),

@@ -14,6 +14,16 @@ const reviewSchema = new mongoose.Schema({
     required: true,
   },
 
+  userName: {
+    type: String,
+    default: '',
+  },
+
+  userAvatar: {
+    type: String,
+    default: '',
+  },
+
   rating: {
     type: Number,
     required: true,
@@ -24,11 +34,15 @@ const reviewSchema = new mongoose.Schema({
     default: '',
   },
 
-  approved: {
-    type: Boolean,
-    default: false,
+  status: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending',
   },
-
+read: {
+  type: Boolean,
+  default: false,
+},
 }, {
   timestamps: true,
 });

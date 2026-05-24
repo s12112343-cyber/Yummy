@@ -1,13 +1,12 @@
 import 'package:socket_io_client/socket_io_client.dart' as IO;
-import '../config/app_config.dart';
 
 class ChefSocketService {
   static late IO.Socket socket;
 
-  static void connect(String chefId) {
-    final base = AppConfig.baseUrl.replaceFirst('/api', '');
+  static void connect(String userId) {
     socket = IO.io(
-      base,
+      'http://10.0.2.2:5000',
+
       IO.OptionBuilder()
           .setTransports(['websocket'])
           .disableAutoConnect()
@@ -16,14 +15,32 @@ class ChefSocketService {
 
     socket.connect();
 
+    //
+    // ✅ CONNECT
+    //
     socket.onConnect((_) {
-      print("✅ Socket Connected");
+      print("✅ SOCKET CONNECTED");
 
-      socket.emit("joinChefRoom", chefId);
+      //
+      // ✅ JOIN ROOM
+      //
+      socket.emit("joinChefRoom", userId);
+
+      print("🔥 JOINED ROOM => $userId");
+
+      //
+      // ✅ LISTEN NOTIFICATIONS
+      //
+      socket.on("newNotification", (data) {
+        print("🔥 NEW NOTIFICATION => $data");
+      });
     });
 
+    //
+    // ❌ DISCONNECT
+    //
     socket.onDisconnect((_) {
-      print("❌ Socket Disconnected");
+      print("❌ SOCKET DISCONNECTED");
     });
   }
 

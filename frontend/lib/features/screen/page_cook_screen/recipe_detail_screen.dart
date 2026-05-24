@@ -8,6 +8,7 @@ import 'dart:convert';
 import '../../../core/services/cart_service.dart';
 import '../../../core/services/favorite_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'CartScreen.dart';
 
 String fullImageUrl(dynamic image) {
   if (image == null) return '';

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/core/config/app_config.dart';
 import 'package:frontend/core/services/cart_service.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../core/config/app_config.dart';
+import 'CartScreen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final double total;
@@ -54,56 +55,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     cvvController.dispose();
 
     super.dispose();
-  }
-
-  Future<void> createOrder() async {
-    try {
-      final response = await http.post(
-        Uri.parse('${AppConfig.baseUrl.replaceFirst('/api', '')}/orders'),
-
-        headers: {"Content-Type": "application/json"},
-
-        body: jsonEncode({
-          "chefId": widget.cartItems.first['chefId'],
-
-          "customerName": nameController.text,
-
-          "customerAvatar": "https://i.pravatar.cc/300",
-
-          "price": widget.total,
-
-          "status": "pending",
-
-          "orderTime": DateTime.now().toIso8601String(),
-
-          "specialInstructions": notesController.text,
-
-          /// ✅ كل عناصر الكارت
-          "items": widget.cartItems.map((item) {
-            return {
-              "dishName": item['name'],
-              "dishImage": item['image'],
-              "quantity": item['quantity'],
-              "price": item['price'],
-            };
-          }).toList(),
-        }),
-      );
-
-      if (response.statusCode == 201) {
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text("Success"),
-            content: const Text("Order placed successfully 🎉"),
-          ),
-        );
-      } else {
-        print(response.body);
-      }
-    } catch (e) {
-      print(e);
-    }
   }
 
   Widget _section(String title, Widget child) {
@@ -246,7 +197,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
                         try {
                           final prefs = await SharedPreferences.getInstance();
-
+                          print("USER ID => ${prefs.getString('userId')}");
+                          final userId = prefs.getString('userId');
                           final token = prefs.getString('token');
 
                           print("TOKEN => $token");
@@ -263,6 +215,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               },
 
                               body: jsonEncode({
+                                "userId": userId,
                                 "chefId": item['chefId'],
                                 "dishName": item['name'],
                                 "dishImage": item['image'],

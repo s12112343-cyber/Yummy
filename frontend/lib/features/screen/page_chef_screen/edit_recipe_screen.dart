@@ -229,7 +229,7 @@ class _EditRecipeScreenState extends State<EditRecipeScreen> {
                         width: double.infinity,
                         fit: BoxFit.cover,
 
-                        errorBuilder: (_, _, _) => Container(
+                        errorBuilder: (_, __, ___) => Container(
                           height: 220,
                           color: Colors.grey.shade200,
                           child: const Icon(Icons.image, size: 50),

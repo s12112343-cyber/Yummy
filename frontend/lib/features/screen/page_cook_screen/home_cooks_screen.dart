@@ -64,6 +64,9 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
   bool _loadingChefs = true;
   bool _loadingBanners = true;
   bool _loadingTrending = true;
+  final TextEditingController _searchController = TextEditingController();
+
+  String _searchQuery = '';
   final List<dynamic> _allRecipes = [];
   int _selectedCategory = 0;
   Set<String> _favoriteChefs = {};
@@ -693,8 +696,8 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildTopSearchBar(),
-                const SizedBox(height: 16),
+                const SizedBox(height: 15),
+
                 _buildHeroBanner(),
                 const SizedBox(height: 24),
                 _buildSectionHeader(
@@ -912,22 +915,9 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
-        onPressed: _goBack,
-      ),
-      backgroundColor: _kNavy,
-      elevation: 0,
-      automaticallyImplyLeading: false,
-      titleSpacing: 0,
-      title: const Text(
-        'Home Cooks',
-        style: TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.w900,
-          color: _kCard,
-        ),
-      ),
+      backgroundColor: Colors.white,
+
+      title: SizedBox(height: 42, child: _buildTopSearchBar()),
       actions: [
         ValueListenableBuilder<Set<String>>(
           valueListenable: FavoriteService.favoriteRecipesNotifier,
@@ -943,7 +933,7 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
                     totalFavorites > 0
                         ? Icons.favorite
                         : Icons.favorite_border_rounded,
-                    color: _kCard,
+                    color: _kNavy,
                   ),
                   onPressed: _navigateToFavorites,
                 ),
@@ -965,7 +955,7 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
                         '$totalFavorites',
                         textAlign: TextAlign.center,
                         style: const TextStyle(
-                          color: Colors.white,
+                          color: _kNavy,
                           fontSize: 9,
                           fontWeight: FontWeight.bold,
                         ),
@@ -976,46 +966,9 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
             );
           },
         ),
+
         IconButton(
-          icon: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              const Icon(Icons.notifications_none_rounded, color: Colors.white),
-              Positioned(
-                right: -1,
-                top: -1,
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color.fromARGB(255, 255, 255, 255),
-                      width: 1.5,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => Scaffold(
-                  appBar: AppBar(
-                    title: const Text('Notifications'),
-                    backgroundColor: Colors.white,
-                  ),
-                  body: const Center(child: Text('No notifications yet 🔔')),
-                ),
-              ),
-            );
-          },
-        ),
-        IconButton(
-          icon: const Icon(Icons.shopping_cart_outlined, color: Colors.white),
+          icon: const Icon(Icons.shopping_cart_outlined, color: _kNavy),
           onPressed: () {
             Navigator.push(
               context,
@@ -1030,37 +983,63 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
 
   Widget _buildTopSearchBar() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: GestureDetector(
-        onTap: () {
-          showSearch(
-            context: context,
-            delegate: ChefSearchDelegate(_chefs, _trendingRecipes),
-          );
+      height: 42,
+
+      alignment: Alignment.center,
+
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+
+      decoration: BoxDecoration(
+        color: Colors.white,
+
+        borderRadius: BorderRadius.circular(30),
+
+        border: Border.all(color: Colors.grey.shade300, width: 1.2),
+
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+
+      child: TextField(
+        controller: _searchController,
+
+        onChanged: (value) {
+          setState(() {
+            _searchQuery = value.toLowerCase();
+          });
         },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(30),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
+
+        decoration: InputDecoration(
+          border: InputBorder.none,
+
+          hintText: 'Search',
+
+          hintStyle: TextStyle(
+            color: Colors.grey.shade500,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
           ),
-          child: Row(
-            children: const [
-              Icon(Icons.search, color: Colors.grey),
-              SizedBox(width: 10),
-              Text(
-                "Search",
-                style: TextStyle(color: Colors.grey, fontSize: 14),
-              ),
-            ],
-          ),
+
+          icon: Icon(Icons.search, color: Colors.grey.shade600, size: 20),
+
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.close),
+
+                  onPressed: () {
+                    _searchController.clear();
+
+                    setState(() {
+                      _searchQuery = '';
+                    });
+                  },
+                )
+              : null,
         ),
       ),
     );
@@ -1338,7 +1317,7 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
                               ? Image.network(
                                   fullImageUrl(img),
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) =>
+                                  errorBuilder: (_, __, ___) =>
                                       _chefAvatarFallback(name),
                                 )
                               : _chefAvatarFallback(name),
@@ -1663,7 +1642,6 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
       ),
     ),
   );
-
   Widget _buildChefsGrid() {
     if (_loadingChefs) {
       return const Padding(
@@ -1672,36 +1650,65 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
       );
     }
 
-    if (_filteredChefs.isEmpty) {
+    //
+    // 🔥 SEARCH FILTER
+    //
+    final displayedChefs = _filteredChefs.where((chef) {
+      final name = (chef['name'] ?? '').toString().toLowerCase();
+
+      final specialty = safeString(chef['specialty']).toLowerCase();
+
+      return name.contains(_searchQuery) || specialty.contains(_searchQuery);
+    }).toList();
+
+    //
+    // 🔥 EMPTY STATE
+    //
+    if (displayedChefs.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(24),
         child: Center(
-          child: Text('No chefs available', style: TextStyle(color: _kTextDim)),
+          child: Text('No chefs found 🔍', style: TextStyle(color: _kTextDim)),
         ),
       );
     }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
+
       child: GridView.builder(
         shrinkWrap: true,
+
         physics: const NeverScrollableScrollPhysics(),
+
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
+
           crossAxisSpacing: 14,
+
           mainAxisSpacing: 14,
+
           childAspectRatio: 0.72,
         ),
-        itemCount: _filteredChefs.length,
+
+        itemCount: displayedChefs.length,
+
         itemBuilder: (_, i) {
-          final chef = _filteredChefs[i];
+          final chef = displayedChefs[i];
+
           final chefId = chef['_id']?.toString() ?? i.toString();
+
           return _ChefCard(
             chef: chef,
+
             isFavourite: _favoriteChefs.contains(chefId),
+
             isFollowing: _followingChefs.contains(chefId),
+
             onFavouriteToggle: () => _toggleFavoriteChef(chefId),
+
             onFollowToggle: () => _toggleFollowChef(chefId),
+
             onTap: () => _navigateToChefProfile(chef),
           );
         },
@@ -1780,7 +1787,7 @@ class _ChefCard extends StatelessWidget {
   });
 
   String get _bgEmoji {
-    final s = (safeString(chef['specialty']) ?? '');
+    final s = (safeString(chef['specialty']) ?? '') as String;
     if (s.contains('Italian')) return '🍝';
     if (s.contains('Pastry') || s.contains('Dessert')) return '🍰';
     if (s.contains('Grill')) return '🥩';
@@ -1793,7 +1800,7 @@ class _ChefCard extends StatelessWidget {
   }
 
   Color get _bgColor {
-    final s = (safeString(chef['specialty']) ?? '');
+    final s = (safeString(chef['specialty']) ?? '') as String;
     if (s.contains('Italian')) return const Color(0xFFFFF3E0);
     if (s.contains('Pastry') || s.contains('Dessert')) {
       return const Color(0xFFFCE4EC);
@@ -2168,7 +2175,7 @@ class _RecipeListItem extends StatelessWidget {
                     ? Image.network(
                         fullImageUrl(recipe['image']),
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) {
+                        errorBuilder: (_, __, ___) {
                           return const Center(
                             child: Text('🍽️', style: TextStyle(fontSize: 30)),
                           );
@@ -2257,7 +2264,7 @@ class ChefSearchDelegate extends SearchDelegate<String> {
         elevation: 0,
       ),
       inputDecorationTheme: const InputDecorationTheme(
-        hintStyle: TextStyle(color: _kTeal, fontSize: 16),
+        hintStyle: TextStyle(color: Colors.white, fontSize: 16),
       ),
       textTheme: const TextTheme(
         titleLarge: TextStyle(color: Colors.white, fontSize: 18),

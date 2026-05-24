@@ -7,51 +7,72 @@ const notificationSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+
     actorId: {
       type: String,
       default: "",
       index: true,
     },
+
     actorName: {
       type: String,
       default: "User",
     },
+
     actorImageUrl: {
       type: String,
       default: "",
     },
+
     type: {
       type: String,
-      enum: ["like", "comment", "follow", "message"],
+      enum: [
+        "follow",
+        "like",
+        "comment",
+        "message",
+        "global",
+        "order",
+        "review",
+        "recipe_review",
+        "order_status",
+      ],
       required: true,
       index: true,
     },
+
     title: {
       type: String,
       required: true,
     },
+
     body: {
       type: String,
       required: true,
     },
+
     postId: {
       type: String,
       default: "",
       index: true,
     },
+
     commentText: {
       type: String,
       default: "",
     },
+
     isRead: {
       type: Boolean,
       default: false,
       index: true,
     },
+
     readAt: {
       type: Date,
       default: null,
     },
+
     payload: {
       type: Object,
       default: {},
@@ -62,6 +83,9 @@ const notificationSchema = new mongoose.Schema(
   }
 );
 
-notificationSchema.index({ recipientId: 1, createdAt: -1 });
+notificationSchema.index({
+  recipientId: 1,
+  createdAt: -1,
+});
 
 module.exports = mongoose.model("Notification", notificationSchema);

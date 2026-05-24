@@ -18,14 +18,7 @@ const {
 } = require('../middleware/authMiddleware');
 
 // ✅ CREATE ORDER
-router.post(
-  '/create',
-
-  verifyToken,
-
-  createOrder,
-);
-
+router.post('/create', verifyToken, createOrder);
 // ✅ GET CHEF ORDERS
 router.get(
   '/chef/:chefId',

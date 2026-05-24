@@ -14,6 +14,8 @@ import 'admin_feedback_page.dart';
 import 'admin_reviews_page.dart';
 import 'admin_reports_page.dart';
 import 'admin_settings_page.dart';
+import 'admin_application_icon.dart';
+import 'admin_notification_requests_page.dart';
 
 // ── Palette (matches screenshot) ──────────────────────────────────────────────
 const _kBg = Color(0xFFF0F4F8);
@@ -45,11 +47,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Map<String, dynamic> _admin = {};
   bool _loadingAdmin = true;
   int _previousIndex = 0;
+  int _pendingBannerRequests = 0;
 
+  List<Map<String, dynamic>> _notifications = [];
   late AnimationController _bellCtrl;
 
   late List<Widget> _pages;
-
   static const _titles = [
     'Dashboard',
     'Users',
@@ -59,6 +62,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     'Reviews',
     'Reports',
     'Feedback',
+    'Application icon',
     'Settings',
   ];
   static const _icons = [
@@ -70,6 +74,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     Icons.star_rounded,
     Icons.bar_chart_rounded,
     Icons.feedback_rounded,
+    Icons.apps_rounded,
     Icons.settings_rounded,
   ];
 
@@ -90,11 +95,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       const AdminOrdersPage(),
       const AdminReviewsPage(),
       const AdminReportsPage(),
+
       AdminFeedbackPage(
         onBack: () {
           setState(() => _selectedIndex = _previousIndex);
         },
       ),
+
+      const AdminApplicationIconPage(),
+
       const AdminSettingsPage(),
     ];
   }
@@ -131,57 +140,79 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Future<void> _loadCounts() async {
     try {
       final t = await AuthService().getToken();
-
       if (t == null) return;
 
       final h = {'Authorization': 'Bearer $t'};
+
+      int pendingOrders = 0;
+      int reviewsCount = 0;
+      int feedbackUnread = 0;
+      int bannerPending = 0;
+
+      final List<Map<String, dynamic>> newNotifications = [];
 
       // 🔥 ORDERS
       try {
         final r = await http.get(
           Uri.parse('${AppConfig.baseUrl}/orders/all'),
-
           headers: h,
         );
 
-        if (r.statusCode == 200 && mounted) {
+        if (r.statusCode == 200) {
           final orders = (jsonDecode(r.body)['orders'] ?? []) as List;
 
-          setState(() {
-            _pendingOrders = orders
-                .where((o) => o['status'] == 'pending')
-                .length;
+          final pending = orders
+              .where((o) => o['status'] == 'pending')
+              .toList();
+          pendingOrders = pending.length;
 
-            // 🔥 TOTAL NOTIFICATIONS
-            _unreadCount = _pendingOrders + _reviewsCount;
-          });
+          for (var order in pending) {
+            newNotifications.add({
+              'id': order['_id'],
+              'type': 'order',
+              'title': 'New Order',
+              'sub': 'New pending order received',
+              'time': order['createdAt'] ?? order['orderTime'],
+              'icon': Icons.shopping_cart_rounded,
+              'color': const Color(0xFF854F0B),
+              'pageIndex': 4,
+            });
+          }
         }
-      } catch (_) {}
+      } catch (e) {
+        print('ORDERS ERROR => $e');
+      }
+
       // 🔥 REVIEWS
       try {
         final r = await http.get(
           Uri.parse('${AppConfig.baseUrl}/reviews/admin/all'),
-
           headers: h,
         );
 
-        if (r.statusCode == 200 && mounted) {
+        if (r.statusCode == 200) {
           final decoded = jsonDecode(r.body);
-
           List reviews = [];
 
           if (decoded is Map) {
             reviews = decoded['data'] ?? [];
           }
 
-          setState(() {
-            _reviewsCount = reviews.length;
+          reviewsCount = reviews.length;
 
-            // 🔥 TOTAL NOTIFICATIONS
-            _unreadCount = _pendingOrders + _reviewsCount;
-          });
+          for (var review in reviews) {
+            newNotifications.add({
+              'id': review['_id'],
 
-          print('REVIEWS => ${reviews.length}');
+              'type': 'review',
+              'title': 'New Review',
+              'sub': review['comment'] ?? 'New review added',
+              'time': review['createdAt'] ?? review['date'],
+              'icon': Icons.star_rounded,
+              'color': const Color(0xFFBA7517),
+              'pageIndex': 5,
+            });
+          }
         }
       } catch (e) {
         print('REVIEWS ERROR => $e');
@@ -194,7 +225,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           headers: h,
         );
 
-        if (r.statusCode == 200 && mounted) {
+        if (r.statusCode == 200) {
           final decoded = jsonDecode(r.body);
           List feedbacks = [];
 
@@ -202,28 +233,161 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             feedbacks = decoded['feedbacks'] ?? [];
           }
 
-          final unread = (feedbacks)
+          final unreadFeedbacks = feedbacks
               .where((f) => (f['read'] ?? false) != true)
-              .length;
+              .toList();
 
-          setState(() {
-            _feedbackCount = feedbacks.length;
-            _feedbackUnread = unread;
-          });
+          feedbackUnread = unreadFeedbacks.length;
+
+          for (var feedback in unreadFeedbacks) {
+            newNotifications.add({
+              'id': feedback['_id'],
+
+              'type': 'feedback',
+              'title': 'New Feedback',
+              'sub': feedback['message'] ?? 'Customer sent feedback',
+              'time': feedback['createdAt'],
+              'icon': Icons.feedback_rounded,
+              'color': Colors.purple,
+              'pageIndex': 7,
+            });
+          }
         }
       } catch (e) {
         print('FEEDBACK ERROR => $e');
       }
-    } catch (_) {}
+
+      // 🔥 BANNER REQUESTS
+      try {
+        final r = await http.get(
+          Uri.parse('${AppConfig.baseUrl}/banner-requests/admin'),
+          headers: h,
+        );
+
+        if (r.statusCode == 200) {
+          final decoded = jsonDecode(r.body);
+          final requests = decoded['requests'] ?? [];
+
+          final pendingRequests = requests
+              .where((req) => req['status'] == 'pending')
+              .toList();
+
+          bannerPending = pendingRequests.length;
+
+          for (var req in pendingRequests) {
+            newNotifications.add({
+              'type': 'banner_request',
+              'title': 'New Banner Request',
+              'sub':
+                  '${req['chefName'] ?? req['chef']?['name'] ?? 'Chef'} sent a banner request',
+              'time': req['createdAt'],
+              'icon': Icons.campaign_rounded,
+              'color': Colors.orange,
+              'pageIndex': 3,
+            });
+          }
+        }
+      } catch (e) {
+        print('BANNER REQUEST ERROR => $e');
+      }
+      //
+      // 🔥 NOTIFICATION REQUESTS
+      //
+      try {
+        final r = await http.get(
+          Uri.parse('${AppConfig.baseUrl}/notification-requests/admin'),
+
+          headers: h,
+        );
+
+        if (r.statusCode == 200) {
+          final decoded = jsonDecode(r.body);
+
+          final requests = decoded['requests'] ?? [];
+
+          final pending = requests
+              .where((req) => req['status'] == 'pending')
+              .toList();
+
+          for (var req in pending) {
+            newNotifications.add({
+              'id': req['_id'],
+
+              'type': 'notification_request',
+
+              'title': 'Notification Request',
+
+              'sub': '${req['chefName'] ?? 'Chef'} wants to send notification',
+
+              'time': req['createdAt'],
+
+              'icon': Icons.notifications_active,
+
+              'color': Colors.purple,
+            });
+          }
+        }
+      } catch (e) {
+        print('NOTIFICATION REQUEST ERROR => $e');
+      }
+      // 🔥 الأحدث فوق
+      newNotifications.sort((a, b) {
+        final at =
+            DateTime.tryParse(a['time']?.toString() ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final bt =
+            DateTime.tryParse(b['time']?.toString() ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+
+        return bt.compareTo(at);
+      });
+
+      if (!mounted) return;
+
+      setState(() {
+        _pendingOrders = pendingOrders;
+        _reviewsCount = reviewsCount;
+        _feedbackUnread = feedbackUnread;
+        _pendingBannerRequests = bannerPending;
+
+        _notifications = newNotifications;
+
+        _unreadCount =
+            pendingOrders + reviewsCount + feedbackUnread + bannerPending;
+      });
+    } catch (e) {
+      print('LOAD COUNTS ERROR => $e');
+    }
   }
 
   void _showNotifications() {
     _bellCtrl.forward(from: 0);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => _NotifSheet(unreadCount: _unreadCount),
+      builder: (_) => _NotifSheet(
+        unreadCount: _unreadCount,
+        notifications: _notifications,
+
+        onNotificationRead: () {
+          setState(() {
+            if (_unreadCount > 0) {
+              _unreadCount--;
+            }
+          });
+        },
+
+        onOpenPage: (index) {
+          Navigator.pop(context);
+
+          setState(() {
+            _previousIndex = _selectedIndex;
+            _selectedIndex = index;
+          });
+        },
+      ),
     );
   }
 
@@ -275,13 +439,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    // 🔥 حماية من أي index غلط
+    if (_selectedIndex >= _pages.length) {
+      _selectedIndex = 0;
+    }
+
     final name = _admin['name'] ?? 'Admin';
+
     final img = _admin['profileImage'];
+
     return Scaffold(
       backgroundColor: _kBg,
+
       appBar: _appBar(name, img),
+
       drawer: _drawer(name, img),
-      body: _pages[_selectedIndex],
+
+      body: IndexedStack(index: _selectedIndex, children: _pages),
     );
   }
 
@@ -405,11 +579,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   color: const Color(0xFF80B0FF),
                   bg: Color(0x40346EB5),
                 ),
-                if ((_pendingOrders + _reviewsCount) > 0) ...[
+                if (_unreadCount > 0) ...[
                   const SizedBox(height: 8),
 
                   _Badge(
-                    label: '${_pendingOrders + _reviewsCount} Notifications',
+                    label: '${_unreadCount} Notifications',
 
                     icon: Icons.notifications_active_rounded,
 
@@ -440,10 +614,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     ? _reviewsCount
                     : _titles[i] == 'Feedback'
                     ? _feedbackUnread
+                    : _titles[i] == 'Banners'
+                    ? _pendingBannerRequests
                     : 0,
                 onTap: () {
-                  setState(() => _previousIndex = _selectedIndex);
-                  setState(() => _selectedIndex = i);
+                  if (i >= _pages.length) {
+                    return;
+                  }
+
+                  setState(() {
+                    _previousIndex = _selectedIndex;
+
+                    _selectedIndex = i;
+                  });
+
                   Navigator.pop(ctx);
                 },
               ),
@@ -676,7 +860,15 @@ class _Badge extends StatelessWidget {
 // ── Notification sheet ─────────────────────────────────────────────────────────
 class _NotifSheet extends StatefulWidget {
   final int unreadCount;
-  const _NotifSheet({required this.unreadCount});
+  final List<Map<String, dynamic>> notifications;
+  final Function(int index) onOpenPage;
+  final VoidCallback onNotificationRead;
+  const _NotifSheet({
+    required this.unreadCount,
+    required this.notifications,
+    required this.onOpenPage,
+    required this.onNotificationRead,
+  });
 
   @override
   State<_NotifSheet> createState() => _NotifSheetState();
@@ -686,44 +878,35 @@ class _NotifSheetState extends State<_NotifSheet>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
 
-  static const _data = [
-    {
-      'title': 'New Order Received',
-      'sub': 'Order #1234 from John Doe',
-      'icon': Icons.shopping_cart_rounded,
-      'time': '5m ago',
-      'color': Color(0xFF854F0B),
-    },
-    {
-      'title': 'Chef Application',
-      'sub': 'New chef registered: Sarah Smith',
-      'icon': Icons.restaurant_rounded,
-      'time': '15m ago',
-      'color': Color(0xFF3B6D11),
-    },
-    {
-      'title': 'System Alert',
-      'sub': 'Database backup completed',
-      'icon': Icons.check_circle_rounded,
-      'time': '1h ago',
-      'color': _kBlue,
-    },
-    {
-      'title': 'New Review',
-      'sub': '5-star review on Italian Pasta',
-      'icon': Icons.star_rounded,
-      'time': '2h ago',
-      'color': Color(0xFFBA7517),
-    },
-  ];
-
   @override
   void initState() {
     super.initState();
+
     _ctrl = AnimationController(
       duration: const Duration(milliseconds: 320),
       vsync: this,
     )..forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  String _timeAgo(dynamic value) {
+    if (value == null) return '';
+
+    final date = DateTime.tryParse(value.toString());
+    if (date == null) return '';
+
+    final diff = DateTime.now().difference(date);
+
+    if (diff.inMinutes < 1) return 'Now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+
+    return '${diff.inDays}d ago';
   }
 
   @override
@@ -802,10 +985,11 @@ class _NotifSheetState extends State<_NotifSheet>
                 ],
               ),
             ),
+
             Divider(height: 1, color: _kDivide),
 
             Expanded(
-              child: widget.unreadCount == 0
+              child: widget.notifications.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -843,12 +1027,14 @@ class _NotifSheetState extends State<_NotifSheet>
                       animation: _ctrl,
                       builder: (_, _) => ListView.separated(
                         padding: const EdgeInsets.all(16),
-                        itemCount: _data.length.clamp(0, widget.unreadCount),
+                        itemCount: widget.notifications.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 10),
                         itemBuilder: (_, i) {
-                          final n = _data[i];
+                          final n = widget.notifications[i];
+
                           final color = n['color'] as Color;
                           final startTime = (i * 0.1).clamp(0.0, 0.7);
+
                           final anim = CurvedAnimation(
                             parent: _ctrl,
                             curve: Interval(
@@ -857,6 +1043,7 @@ class _NotifSheetState extends State<_NotifSheet>
                               curve: Curves.easeOutCubic,
                             ),
                           );
+
                           return FadeTransition(
                             opacity: anim,
                             child: SlideTransition(
@@ -864,60 +1051,145 @@ class _NotifSheetState extends State<_NotifSheet>
                                 begin: const Offset(0.15, 0),
                                 end: Offset.zero,
                               ).animate(anim),
-                              child: Container(
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: _kWhite,
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: _kDivide),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(9),
-                                      decoration: BoxDecoration(
-                                        color: color.withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(10),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(14),
+                                onTap: () async {
+                                  final id = n['id'];
+
+                                  final type = n['type'];
+
+                                  final pageIndex = n['pageIndex'];
+
+                                  String? url;
+
+                                  /// REVIEW
+                                  if (type == 'review') {
+                                    url =
+                                        '${AppConfig.baseUrl}/reviews/read/$id';
+                                  }
+
+                                  /// FEEDBACK
+                                  if (type == 'feedback') {
+                                    url =
+                                        '${AppConfig.baseUrl}/feedback/read/$id';
+                                  }
+
+                                  /// BANNER REQUEST
+                                  if (type == 'banner_request') {
+                                    url =
+                                        '${AppConfig.baseUrl}/banner-requests/read/$id';
+                                  }
+
+                                  /// 🔥 notification request page
+                                  if (type == 'notification_request') {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const AdminNotificationRequestsPage(),
                                       ),
-                                      child: Icon(
-                                        n['icon'] as IconData,
-                                        color: color,
-                                        size: 18,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            n['title'] as String,
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w700,
-                                              color: _kText,
-                                            ),
+                                    );
+
+                                    return;
+                                  }
+
+                                  /// 🔥 افتح الصفحة العادية
+                                  if (pageIndex is int) {
+                                    widget.onOpenPage(pageIndex);
+                                  }
+                                  try {
+                                    if (url != null) {
+                                      final prefs =
+                                          await SharedPreferences.getInstance();
+
+                                      final token = prefs.getString('token');
+
+                                      await http.patch(
+                                        Uri.parse(url),
+                                        headers: {
+                                          'Authorization': 'Bearer $token',
+                                        },
+                                      );
+                                    }
+                                  } catch (e) {
+                                    print('READ NOTIFICATION ERROR => $e');
+                                  }
+
+                                  /// 🔥 حذف الإشعار محلي
+                                  setState(() {
+                                    widget.notifications.removeAt(i);
+                                  });
+
+                                  /// 🔥 نقص العدد
+                                  widget.onNotificationRead();
+
+                                  /// 🔥 افتح الصفحة
+                                  if (pageIndex is int) {
+                                    widget.onOpenPage(pageIndex);
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: _kWhite,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: _kDivide),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(9),
+                                        decoration: BoxDecoration(
+                                          color: color.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
                                           ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            n['sub'] as String,
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              color: _kSub,
+                                        ),
+                                        child: Icon(
+                                          n['icon'] as IconData,
+                                          color: color,
+                                          size: 18,
+                                        ),
+                                      ),
+
+                                      const SizedBox(width: 12),
+
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              n['title']?.toString() ?? '',
+                                              style: const TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                                color: _kText,
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              n['sub']?.toString() ?? '',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                color: _kSub,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                    Text(
-                                      n['time'] as String,
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        color: _kSub,
+
+                                      Text(
+                                        _timeAgo(n['time']),
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          color: _kSub,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),

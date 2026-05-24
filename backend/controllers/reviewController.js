@@ -2,27 +2,25 @@
 const mongoose = require('mongoose');
 const Review = require('../models/Review'); // ✅ تأكد من استيراد النموذج
 const Chef = require('../models/Chef'); // ✅ استيراد نموذج الشيف
+const User = require('../models/User');
+const Notification = require('../models/Notification');
 
-// ✅ إضافة تقييم
 const addReview = async (req, res) => {
   try {
     const userId = req.user.id || req.user.userId;
-    const userName = req.user.name;
-    const userAvatar = req.user.profileImage || '';
-
-    console.log('User from token:', { userId, userName });
 
     if (!userId) {
       return res.status(400).json({ message: 'User ID is required' });
     }
 
-    if (!userName) {
-      return res.status(400).json({ message: 'User name is required' });
-    }
+    const userData = await User.findById(userId);
+
+    const userName = userData?.name || 'Unknown User';
+    const userAvatar = userData?.profileImage || '';
+
+    console.log('User from DB:', { userId, userName });
 
     const { chefId, rating, comment, mealName, orderId } = req.body;
-
-    console.log('Review data:', { chefId, rating, comment });
 
     if (!chefId) {
       return res.status(400).json({ message: 'chefId is required' });
@@ -36,9 +34,8 @@ const addReview = async (req, res) => {
       return res.status(400).json({ message: 'Comment is required' });
     }
 
-    // ✅ التحقق من وجود الشيف في قاعدة البيانات
     const chefExists = await Chef.findById(chefId);
-    
+
     if (!chefExists) {
       return res.status(404).json({ message: 'Chef not found' });
     }
@@ -54,10 +51,10 @@ const addReview = async (req, res) => {
     const review = new Review({
       chefId: new mongoose.Types.ObjectId(chefId),
       userId: new mongoose.Types.ObjectId(userId),
-      userName,
-      userAvatar,
-      rating,
-      comment,
+      userName: userName,
+      userAvatar: userAvatar,
+      rating: Number(rating),
+      comment: comment.trim(),
       mealName: mealName || '',
       orderId: orderId || '',
       status: 'pending',
@@ -66,8 +63,8 @@ const addReview = async (req, res) => {
     await review.save();
 
     res.status(201).json({
-      message: 'Review added, waiting for admin approval',
       success: true,
+      message: 'Review added, waiting for admin approval',
       data: review,
     });
   } catch (error) {
@@ -75,7 +72,33 @@ const addReview = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+const markReviewRead = async (req, res) => {
+  try {
+    const review = await Review.findById(req.params.id);
 
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        message: 'Review not found',
+      });
+    }
+
+    review.read = true;
+
+    await review.save();
+
+    res.json({
+      success: true,
+      message: 'Review marked as read',
+    });
+
+  } catch (e) {
+    res.status(500).json({
+      success: false,
+      message: e.message,
+    });
+  }
+};
 const getChefReviews = async (req, res) => {
 
   try {
@@ -226,66 +249,193 @@ const getAllReviewsForAdmin = async (req, res) => {
     });
   }
 };
-
-// ✅ الموافقة على التقييم
 const approveReview = async (req, res) => {
+
   try {
-    const review = await Review.findByIdAndUpdate(
-      req.params.id,
-      { status: 'approved' },
-      { new: true }
-    );
-    
+
+    const review =
+      await Review.findById(
+        req.params.id,
+      );
+
     if (!review) {
-      return res.status(404).json({ message: 'Review not found' });
+
+      return res.status(404).json({
+
+        success: false,
+
+        message: 'Review not found',
+      });
     }
-    
-    console.log(`Review ${req.params.id} approved`);
-    
-    res.json({ success: true, data: review });
-  } catch (error) {
-    console.error('Error in approveReview:', error);
-    res.status(500).json({ message: error.message });
+
+    //
+    // 🔥 GET CHEF
+    //
+    const chef =
+      await Chef.findById(
+        review.chefId,
+      );
+
+    if (!chef) {
+
+      return res.status(404).json({
+
+        success: false,
+
+        message: 'Chef not found',
+      });
+    }
+
+    //
+    // 🔥 APPROVE REVIEW
+    //
+    review.status = 'approved';
+
+    await review.save();
+
+    //
+    // 🔥 SAVE NOTIFICATION
+    //
+    const notification =
+      await Notification.create({
+
+        recipientId:
+          chef.userId.toString(),
+
+        actorId: '',
+
+        actorName: 'Admin',
+
+        actorImageUrl: '',
+
+        type: 'review',
+
+        title:
+          'New Review ⭐',
+
+        body:
+          'Someone reviewed your profile',
+
+        isRead: false,
+
+        payload: {
+          reviewId:
+            review._id,
+        },
+      });
+
+    console.log(
+      'NOTIFICATION SAVED =>',
+      notification,
+    );
+
+    //
+    // 🔥 REALTIME SOCKET
+    //
+    const io =
+      req.app.get('io');
+
+    io.to(
+      chef.userId.toString(),
+    ).emit(
+      'newNotification',
+      notification,
+    );
+
+    res.status(200).json({
+
+      success: true,
+
+      message:
+        'Review approved successfully',
+
+      review,
+    });
+
+  } catch (e) {
+
+    console.log(
+      'APPROVE REVIEW ERROR =>',
+      e,
+    );
+
+    res.status(500).json({
+
+      success: false,
+
+      message: e.message,
+    });
   }
 };
 
-// ✅ رفض التقييم
+
 const rejectReview = async (req, res) => {
-  try {
-    const review = await Review.findByIdAndUpdate(
-      req.params.id,
-      { status: 'rejected' },
-      { new: true }
-    );
-    
-    if (!review) {
-      return res.status(404).json({ message: 'Review not found' });
-    }
-    
-    console.log(`Review ${req.params.id} rejected`);
-    
-    res.json({ success: true, data: review });
-  } catch (error) {
-    console.error('Error in rejectReview:', error);
-    res.status(500).json({ message: error.message });
-  }
-};
 
-// ✅ حذف التقييم
-const deleteReview = async (req, res) => {
   try {
-    const review = await Review.findByIdAndDelete(req.params.id);
-    
+
+    const review =
+      await Review.findById(
+        req.params.id,
+      );
+
     if (!review) {
-      return res.status(404).json({ message: 'Review not found' });
+
+      return res.status(404).json({
+
+        success: false,
+
+        message: 'Review not found',
+      });
     }
-    
-    console.log(`Review ${req.params.id} deleted`);
-    
-    res.json({ success: true, message: 'Deleted successfully' });
-  } catch (error) {
-    console.error('Error in deleteReview:', error);
-    res.status(500).json({ message: error.message });
+
+    review.status =
+      'rejected';
+
+    await review.save();
+
+    res.status(200).json({
+
+      success: true,
+
+      message:
+        'Review rejected successfully',
+
+      review,
+    });
+
+  } catch (e) {
+
+    res.status(500).json({
+
+      success: false,
+
+      message: e.message,
+    });
+  }
+};const deleteReview = async (req, res) => {
+
+  try {
+
+    await Review.findByIdAndDelete(
+      req.params.id,
+    );
+
+    res.status(200).json({
+
+      success: true,
+
+      message:
+        'Review deleted successfully',
+    });
+
+  } catch (e) {
+
+    res.status(500).json({
+
+      success: false,
+
+      message: e.message,
+    });
   }
 };
 
@@ -296,4 +446,5 @@ module.exports = {
   approveReview,
   rejectReview,
   deleteReview,
+  markReviewRead,
 };

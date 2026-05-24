@@ -21,10 +21,11 @@ const feedbackSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+  
     read: {
-      type: Boolean,
-      default: false,
-    },
+  type: Boolean,
+  default: false,
+},
   },
   { timestamps: true }
 );

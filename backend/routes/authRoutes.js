@@ -12,6 +12,8 @@ const {
   verifyResetCode,
   resetPassword,
   getMe,
+  changeEmail,
+  changePassword
 } = require("../controllers/authController");
 
 // Authentication endpoints with rate limiting
@@ -20,7 +22,8 @@ router.post("/login", authLimiter, login);
 router.get("/me", verifyToken, getMe);
 router.patch("/update-name", verifyToken, updateUserName);
 router.post("/device-token", verifyToken, registerDeviceToken);
-
+router.patch("/change-email",verifyToken,changeEmail);
+router.patch("/change-password", verifyToken,changePassword);
 // Password reset with strict rate limiting
 router.post("/forgot-password/send-code", resetCodeLimiter, sendResetCode);
 router.post("/forgot-password/verify-code", resetCodeLimiter, verifyResetCode);
