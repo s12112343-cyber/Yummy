@@ -12,7 +12,15 @@ class AppConfig {
   // ==============================
   // YouTube API Key
   // ==============================
-  static const String youtubeApiKey = "AIzaSyBHKVYKD7xAyIz7y0YFO7KBH3QGWrQp4UQ";
+  static const List<String> youtubeApiKeys = [
+    'AIzaSyAoJe2O-UWp2Ya-tbZlx0psed7XwRyEluA',
+    'AIzaSyAJIq4xal4uDJ1l70H_WhVSiTVzKAu98wo',
+    'AIzaSyC19wwCEOCoQgIkPOpooDtDvPsFjQAIm04',
+    'AIzaSyADEmWelIw6QpkOV7s6nbaPhWw8jfxqs8Q',
+    'AIzaSyC6HIFCCPQiAJltbOVznWNyLTob9DXWxrg',
+  ];
+
+  static final String youtubeApiKey = youtubeApiKeys.first;
 
   // ==============================
   // Helpers

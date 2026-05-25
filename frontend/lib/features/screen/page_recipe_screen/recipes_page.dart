@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 
 import 'recipe_videos_section.dart';
 import 'recipe_cards_section.dart';
+import 'recipe_filter_screen.dart';
 
 enum _RecipeSortOrder { newestFirst, oldestFirst, mostPopular }
 
@@ -32,13 +33,37 @@ class _RecipesPageState extends State<RecipesPage>
 
   final TextEditingController searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
+  String selectedNutritionFilter = "";
 
   String selectedCuisine = "All";
   bool _isSearchExpanded = false;
   Timer? _searchDebounce;
+  List<String> selectedDietTypes = [];
 
+  List<String> selectedIncludeIngredients = [];
+
+  List<String> selectedExcludeIngredients = [];
+
+  String selectedCookingTime = "";
+  String selectedMealTime = "";
+
+  List<String> selectedMedicalDiets = [];
+
+  List<String> selectedFoodExceptions = [];
   _RecipeSortOrder _sortOrder = _RecipeSortOrder.newestFirst;
   _RecipeFilter _recipeFilter = _RecipeFilter.all;
+
+  bool get _hasActiveFilters {
+    return selectedMealTime.isNotEmpty ||
+        (selectedCuisine.isNotEmpty && selectedCuisine != 'All') ||
+        selectedCookingTime.isNotEmpty ||
+        selectedNutritionFilter.isNotEmpty ||
+        selectedDietTypes.isNotEmpty ||
+        selectedIncludeIngredients.isNotEmpty ||
+        selectedExcludeIngredients.isNotEmpty ||
+        selectedMedicalDiets.isNotEmpty ||
+        selectedFoodExceptions.isNotEmpty;
+  }
 
   @override
   void initState() {
@@ -226,17 +251,16 @@ class _RecipesPageState extends State<RecipesPage>
                         }
                       },
                       onChanged: (value) {
-                        setState(() {});
                         _searchDebounce?.cancel();
-                        if (value.trim().length >= 2) {
-                          _searchDebounce = Timer(
-                            const Duration(milliseconds: 350),
-                            () {
-                              // يمكنك إضافة منطق البحث هنا
-                              print('🔍 Searching for: ${value.trim()}');
-                            },
-                          );
-                        }
+
+                        _searchDebounce = Timer(
+                          const Duration(milliseconds: 300),
+                          () {
+                            if (mounted) {
+                              setState(() {});
+                            }
+                          },
+                        );
                       },
                       decoration: InputDecoration(
                         hintText: expanded ? "Search recipes..." : "Search",
@@ -291,17 +315,44 @@ class _RecipesPageState extends State<RecipesPage>
   }
 
   Widget _buildFilterButton() {
-    final hasActiveFilter =
-        _recipeFilter != _RecipeFilter.all ||
-        _sortOrder != _RecipeSortOrder.newestFirst ||
-        selectedCuisine != "All";
+    final hasActiveFilter = _hasActiveFilters;
 
     return Builder(
       builder: (ctx) {
         return InkWell(
-          onTap: () {
-            final scaffold = Scaffold.maybeOf(ctx);
-            scaffold?.openEndDrawer();
+          onTap: () async {
+            final result = await Navigator.push(
+              context,
+
+              MaterialPageRoute(builder: (_) => const RecipeFilterScreen()),
+            );
+
+            if (result != null) {
+              setState(() {
+                selectedCuisine = result["cuisine"] ?? "";
+                selectedDietTypes = List<String>.from(result["diets"] ?? []);
+
+                selectedIncludeIngredients = List<String>.from(
+                  result["includeIngredients"] ?? [],
+                );
+
+                selectedExcludeIngredients = List<String>.from(
+                  result["excludeIngredients"] ?? [],
+                );
+
+                selectedCookingTime = result["cookingTime"] ?? "";
+                selectedMealTime = result["mealTime"] ?? "";
+
+                selectedMedicalDiets = List<String>.from(
+                  result["medicalDiets"] ?? [],
+                );
+
+                selectedFoodExceptions = List<String>.from(
+                  result["foodExceptions"] ?? [],
+                );
+                selectedNutritionFilter = result["nutritionFilter"] ?? "";
+              });
+            }
           },
           borderRadius: BorderRadius.circular(12),
           child: Stack(
@@ -1002,16 +1053,32 @@ class _RecipesPageState extends State<RecipesPage>
               // ======================
               // VIDEOS
               // ======================
-              RecipeVideosSection(
-                searchText: searchController.text,
-
-                selectedCuisine: selectedCuisine,
-              ),
+              RecipeVideosSection(searchText: searchController.text),
 
               // ======================
               // RECIPES
               // ======================
-              RecipeCardsSection(searchText: searchController.text),
+              RecipeCardsSection(
+                searchText: searchController.text,
+
+                selectedCuisine: selectedCuisine,
+
+                selectedDietTypes: selectedDietTypes,
+
+                selectedIncludeIngredients: selectedIncludeIngredients,
+
+                selectedExcludeIngredients: selectedExcludeIngredients,
+
+                selectedCookingTime: selectedCookingTime,
+
+                selectedNutritionFilter: selectedNutritionFilter,
+
+                selectedMealTime: selectedMealTime,
+
+                selectedMedicalDiets: selectedMedicalDiets,
+
+                selectedFoodExceptions: selectedFoodExceptions,
+              ),
             ],
           ),
         ),

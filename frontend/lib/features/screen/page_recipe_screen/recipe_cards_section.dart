@@ -1,210 +1,637 @@
 import 'package:flutter/material.dart';
 
-class RecipeCardsSection extends StatelessWidget {
+import '/../../models/recipe_details_model.dart';
+import '/../../core/services/recipe_service.dart';
+
+import 'recipe_details_page.dart';
+
+class RecipeCardsSection extends StatefulWidget {
   final String searchText;
 
-  const RecipeCardsSection({super.key, required this.searchText});
+  final String selectedCuisine;
+
+  final String selectedMealTime;
+
+  final String selectedCookingTime;
+
+  final String selectedNutritionFilter;
+
+  final List<String> selectedDietTypes;
+
+  final List<String> selectedIncludeIngredients;
+
+  final List<String> selectedExcludeIngredients;
+
+  final List<String> selectedMedicalDiets;
+
+  final List<String> selectedFoodExceptions;
+
+  const RecipeCardsSection({
+    super.key,
+
+    required this.searchText,
+
+    required this.selectedCuisine,
+
+    required this.selectedMealTime,
+
+    required this.selectedCookingTime,
+
+    required this.selectedNutritionFilter,
+
+    required this.selectedDietTypes,
+
+    required this.selectedIncludeIngredients,
+
+    required this.selectedExcludeIngredients,
+
+    required this.selectedMedicalDiets,
+
+    required this.selectedFoodExceptions,
+  });
+
+  @override
+  State<RecipeCardsSection> createState() => _RecipeCardsSectionState();
+}
+
+class _RecipeCardsSectionState extends State<RecipeCardsSection> {
+  late Future<List<RecipeDetailsModel>> _recipesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _recipesFuture = _loadRecipes();
+  }
+
+  @override
+  void didUpdateWidget(covariant RecipeCardsSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.searchText != widget.searchText ||
+        oldWidget.selectedCuisine != widget.selectedCuisine ||
+        oldWidget.selectedDietTypes != widget.selectedDietTypes) {
+      _recipesFuture = _loadRecipes();
+    }
+  }
+
+  Future<List<RecipeDetailsModel>> _loadRecipes() {
+    return RecipeService.getRecipes();
+  }
+
+  Future<void> _refreshRecipes() async {
+    setState(() {
+      _recipesFuture = _loadRecipes();
+    });
+
+    await _recipesFuture;
+  }
+
+  bool _matchesSearchText(String query, List<String> fields) {
+    final normalizedQuery = query.trim().toLowerCase();
+
+    if (normalizedQuery.isEmpty) return true;
+
+    final tokens = normalizedQuery
+        .split(RegExp(r'\s+'))
+        .where((token) => token.isNotEmpty)
+        .toList();
+
+    return tokens.any((token) {
+      return fields.any((field) => field.toLowerCase().contains(token));
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final List recipes = [
-      {
-        "title": "Chicken Burger",
-        "image": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd",
-        "time": "25 min",
-        "calories": "420 kcal",
-      },
+    return FutureBuilder<List<RecipeDetailsModel>>(
+      future: _recipesFuture,
 
-      {
-        "title": "Creamy Pasta",
-        "image": "https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9",
-        "time": "18 min",
-        "calories": "350 kcal",
-      },
+      builder: (context, snapshot) {
+        // =========================
+        // LOADING
+        // =========================
 
-      {
-        "title": "Healthy Salad",
-        "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c",
-        "time": "10 min",
-        "calories": "190 kcal",
-      },
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-      {
-        "title": "Pizza",
-        "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591",
-        "time": "35 min",
-        "calories": "510 kcal",
-      },
-    ];
+        // =========================
+        // ERROR
+        // =========================
 
-    final filteredRecipes = recipes.where((recipe) {
-      return recipe["title"].toString().toLowerCase().contains(
-        searchText.toLowerCase(),
-      );
-    }).toList();
+        if (snapshot.hasError) {
+          return const Center(
+            child: Text(
+              "Something went wrong 😭",
+              style: TextStyle(fontSize: 18),
+            ),
+          );
+        }
 
-    if (filteredRecipes.isEmpty) {
-      return const Center(
-        child: Text(
-          "No recipes found",
+        final recipes = snapshot.data ?? [];
 
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: Color(0xff6B7A90),
-          ),
-        ),
-      );
-    }
+        // =========================
+        // FILTERING
+        // =========================
 
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+        final filteredRecipes = recipes.where((recipe) {
+          final title = recipe.title.toLowerCase();
 
-      itemCount: filteredRecipes.length,
+          final cuisine = recipe.cuisine.toLowerCase();
 
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
+          final dietType = recipe.dietType.toLowerCase();
 
-        crossAxisSpacing: 14,
+          final ingredients = recipe.ingredients.join(" ").toLowerCase();
 
-        mainAxisSpacing: 14,
+          final calories = recipe.calories;
 
-        childAspectRatio: 0.67,
-      ),
+          final protein = recipe.protein;
 
-      itemBuilder: (context, index) {
-        final recipe = filteredRecipes[index];
+          final carbs = recipe.carbs;
 
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
+          final fat = recipe.fat;
 
-            borderRadius: BorderRadius.circular(22),
+          // =====================
+          // SEARCH
+          // =====================
 
-            border: Border.all(color: const Color(0xffDDE7F3)),
+          final matchesSearch = _matchesSearchText(widget.searchText, [
+            title,
+            cuisine,
+            dietType,
+            ingredients,
+            recipe.cookingTime,
+            recipe.preparationTime,
+          ]);
 
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xff93B4DF).withOpacity(0.10),
+          // =====================
+          // CUISINE
+          // =====================
 
-                blurRadius: 14,
+          final cleanCuisine = widget.selectedCuisine
+              .replaceAll(RegExp(r'[^a-zA-Z ]'), '')
+              .trim()
+              .toLowerCase();
 
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
+          final matchesCuisine =
+              widget.selectedCuisine.isEmpty ||
+              widget.selectedCuisine == 'All' ||
+              cuisine.contains(cleanCuisine);
 
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          // =====================
+          // MEAL TIME
+          // =====================
 
-            children: [
-              Expanded(
-                child: Stack(
-                  children: [
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(22),
-                      ),
+          bool matchesMealTime = true;
 
-                      child: Image.network(
-                        recipe["image"].toString(),
+          final meal = widget.selectedMealTime.toLowerCase();
 
-                        width: double.infinity,
+          if (meal.isNotEmpty) {
+            if (meal.contains("breakfast")) {
+              matchesMealTime =
+                  title.contains("breakfast") ||
+                  ingredients.contains("egg") ||
+                  ingredients.contains("toast") ||
+                  ingredients.contains("oats");
+            } else if (meal.contains("lunch")) {
+              matchesMealTime = calories >= 300;
+            } else if (meal.contains("dinner")) {
+              matchesMealTime = calories >= 500;
+            } else if (meal.contains("snack")) {
+              matchesMealTime = calories <= 250;
+            } else if (meal.contains("dessert")) {
+              matchesMealTime =
+                  ingredients.contains("chocolate") ||
+                  ingredients.contains("sugar") ||
+                  title.contains("cake");
+            } else if (meal.contains("drinks")) {
+              matchesMealTime =
+                  title.contains("drink") ||
+                  title.contains("juice") ||
+                  title.contains("smoothie");
+            }
+          }
 
-                        fit: BoxFit.cover,
+          // =====================
+          // INCLUDE INGREDIENTS
+          // =====================
+
+          final matchesIncludeIngredients =
+              widget.selectedIncludeIngredients.isEmpty ||
+              widget.selectedIncludeIngredients.any((ingredient) {
+                final cleanIngredient = ingredient
+                    .replaceAll(RegExp(r'[^a-zA-Z ]'), '')
+                    .trim()
+                    .toLowerCase();
+
+                return ingredients.contains(cleanIngredient);
+              });
+
+          // =====================
+          // EXCLUDE INGREDIENTS
+          // =====================
+
+          final matchesExcludeIngredients = !widget.selectedExcludeIngredients
+              .any((ingredient) {
+                final cleanIngredient = ingredient
+                    .replaceAll(RegExp(r'[^a-zA-Z ]'), '')
+                    .trim()
+                    .toLowerCase();
+
+                return ingredients.contains(cleanIngredient);
+              });
+
+          // =====================
+          // DIETS
+          // =====================
+
+          bool matchesDiet = true;
+
+          if (widget.selectedDietTypes.isNotEmpty) {
+            matchesDiet = widget.selectedDietTypes.any((diet) {
+              final cleanDiet = diet
+                  .replaceAll(RegExp(r'[^a-zA-Z ]'), '')
+                  .trim()
+                  .toLowerCase();
+
+              // VEGAN
+
+              if (cleanDiet.contains("vegan")) {
+                return !ingredients.contains("meat") &&
+                    !ingredients.contains("chicken") &&
+                    !ingredients.contains("egg") &&
+                    !ingredients.contains("milk");
+              }
+
+              // VEGETARIAN
+
+              if (cleanDiet.contains("vegetarian")) {
+                return !ingredients.contains("chicken") &&
+                    !ingredients.contains("beef") &&
+                    !ingredients.contains("fish");
+              }
+
+              // KETO
+
+              if (cleanDiet.contains("keto")) {
+                return carbs <= 40;
+              }
+
+              // HIGH PROTEIN
+
+              if (cleanDiet.contains("high protein")) {
+                return protein >= 15;
+              }
+
+              // LOW CARB
+
+              if (cleanDiet.contains("low carb")) {
+                return carbs <= 40;
+              }
+
+              // HEALTHY
+
+              if (cleanDiet.contains("healthy")) {
+                return calories <= 600 && fat <= 25;
+              }
+
+              // BALANCED
+
+              if (cleanDiet.contains("balanced")) {
+                return protein >= 15 && carbs >= 20 && fat <= 25;
+              }
+
+              // WEIGHT LOSS
+
+              if (cleanDiet.contains("weight loss")) {
+                return calories <= 600;
+              }
+
+              // DETOX
+
+              if (cleanDiet.contains("detox")) {
+                return ingredients.contains("lemon") ||
+                    ingredients.contains("avocado");
+              }
+
+              return title.contains(cleanDiet) ||
+                  ingredients.contains(cleanDiet);
+            });
+          }
+
+          // =====================
+          // MEDICAL DIETS
+          // =====================
+
+          bool matchesMedical = true;
+
+          if (widget.selectedMedicalDiets.isNotEmpty) {
+            matchesMedical = widget.selectedMedicalDiets.every((diet) {
+              final cleanDiet = diet
+                  .replaceAll(RegExp(r'[^a-zA-Z ]'), '')
+                  .trim()
+                  .toLowerCase();
+
+              if (cleanDiet.contains("diabetic")) {
+                return carbs <= 45;
+              }
+
+              if (cleanDiet.contains("low sodium")) {
+                return !ingredients.contains("salt");
+              }
+
+              if (cleanDiet.contains("gluten free")) {
+                return !ingredients.contains("flour");
+              }
+
+              if (cleanDiet.contains("lactose free")) {
+                return !ingredients.contains("milk");
+              }
+
+              return true;
+            });
+          }
+
+          // =====================
+          // FOOD EXCEPTIONS
+          // =====================
+
+          bool matchesFoodExceptions = true;
+
+          if (widget.selectedFoodExceptions.isNotEmpty) {
+            matchesFoodExceptions = widget.selectedFoodExceptions.every((food) {
+              final cleanFood = food
+                  .replaceAll(RegExp(r'[^a-zA-Z ]'), '')
+                  .trim()
+                  .toLowerCase();
+
+              if (cleanFood.contains("nut free")) {
+                return !ingredients.contains("nuts");
+              }
+
+              if (cleanFood.contains("dairy free")) {
+                return !ingredients.contains("milk");
+              }
+
+              if (cleanFood.contains("egg free")) {
+                return !ingredients.contains("egg");
+              }
+
+              if (cleanFood.contains("fish free")) {
+                return !ingredients.contains("fish");
+              }
+
+              return true;
+            });
+          }
+
+          // =====================
+          // COOKING TIME
+          // =====================
+
+          final cookingMinutes =
+              int.tryParse(
+                recipe.cookingTime.replaceAll(RegExp(r'[^0-9]'), ''),
+              ) ??
+              0;
+
+          bool matchesCookingTime = true;
+
+          final cookingTime = widget.selectedCookingTime;
+
+          if (cookingTime.isNotEmpty) {
+            if (cookingTime.contains("15")) {
+              matchesCookingTime = cookingMinutes <= 15;
+            } else if (cookingTime.contains("30")) {
+              matchesCookingTime = cookingMinutes <= 30;
+            } else if (cookingTime.contains("60")) {
+              matchesCookingTime = cookingMinutes <= 60;
+            } else if (cookingTime.contains("1 hour")) {
+              matchesCookingTime = cookingMinutes >= 60;
+            }
+          }
+
+          // =====================
+          // NUTRITION
+          // =====================
+
+          bool matchesNutrition = true;
+
+          final nutrition = widget.selectedNutritionFilter;
+
+          if (nutrition.isNotEmpty) {
+            if (nutrition.contains("Low Calories")) {
+              matchesNutrition = calories <= 600;
+            } else if (nutrition.contains("High Calories")) {
+              matchesNutrition = calories >= 700;
+            } else if (nutrition.contains("High Protein")) {
+              matchesNutrition = protein >= 15;
+            } else if (nutrition.contains("Low Protein")) {
+              matchesNutrition = protein <= 15;
+            } else if (nutrition.contains("Low Carb")) {
+              matchesNutrition = carbs <= 40;
+            } else if (nutrition.contains("High Carb")) {
+              matchesNutrition = carbs >= 50;
+            } else if (nutrition.contains("Low Fat")) {
+              matchesNutrition = fat <= 15;
+            } else if (nutrition.contains("High Fat")) {
+              matchesNutrition = fat >= 20;
+            }
+          }
+
+          // =====================
+          // FINAL
+          // =====================
+
+          return matchesSearch &&
+              matchesCuisine &&
+              matchesMealTime &&
+              matchesDiet &&
+              matchesMedical &&
+              matchesFoodExceptions &&
+              matchesIncludeIngredients &&
+              matchesExcludeIngredients &&
+              matchesCookingTime &&
+              matchesNutrition;
+        }).toList();
+
+        // =========================
+        // LIST
+        // =========================
+
+        return RefreshIndicator(
+          onRefresh: _refreshRecipes,
+          color: const Color(0xff1B3C73),
+          child: filteredRecipes.isEmpty
+              ? ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 24,
+                  ),
+                  children: const [
+                    SizedBox(height: 140),
+                    Center(
+                      child: Text(
+                        "No recipes found 😭",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
+                  ],
+                )
+              : ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  itemCount: filteredRecipes.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 20),
+                  itemBuilder: (context, index) {
+                    final recipe = filteredRecipes[index];
 
-                    Positioned(
-                      top: 10,
-                      right: 10,
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                RecipeDetailsPage(recipe: recipe),
+                          ),
+                        );
+                      },
 
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
+                        height: 340,
 
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(32),
 
-                          borderRadius: BorderRadius.circular(999),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xff1B3C73).withOpacity(0.14),
+
+                              blurRadius: 22,
+
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
                         ),
 
-                        child: Text(
-                          recipe["time"].toString(),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(32),
 
-                          style: const TextStyle(
-                            color: Colors.white,
+                          child: Stack(
+                            children: [
+                              Positioned.fill(
+                                child: Image.network(
+                                  recipe.image,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
 
-                            fontSize: 11,
+                              Positioned.fill(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
 
-                            fontWeight: FontWeight.w700,
+                                      end: Alignment.bottomCenter,
+
+                                      colors: [
+                                        Colors.black.withOpacity(0.10),
+
+                                        Colors.black.withOpacity(0.25),
+
+                                        Colors.black.withOpacity(0.70),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              Positioned(
+                                left: 20,
+
+                                right: 20,
+
+                                bottom: 20,
+
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+
+                                  children: [
+                                    Text(
+                                      recipe.title,
+
+                                      maxLines: 2,
+
+                                      overflow: TextOverflow.ellipsis,
+
+                                      style: const TextStyle(
+                                        color: Colors.white,
+
+                                        fontSize: 24,
+
+                                        fontWeight: FontWeight.w900,
+
+                                        height: 1.2,
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 16),
+
+                                    Wrap(
+                                      spacing: 10,
+
+                                      runSpacing: 10,
+
+                                      children: [
+                                        _buildChip(recipe.cuisine),
+
+                                        _buildChip(recipe.dietType),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
-              ),
-
-              Padding(
-                padding: const EdgeInsets.all(12),
-
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-
-                  children: [
-                    Text(
-                      recipe["title"].toString(),
-
-                      maxLines: 2,
-
-                      overflow: TextOverflow.ellipsis,
-
-                      style: const TextStyle(
-                        fontSize: 15,
-
-                        fontWeight: FontWeight.w800,
-
-                        color: Color(0xff1B3C73),
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.local_fire_department_rounded,
-
-                          color: Colors.orange,
-
-                          size: 18,
-                        ),
-
-                        const SizedBox(width: 4),
-
-                        Text(
-                          recipe["calories"].toString(),
-
-                          style: const TextStyle(
-                            color: Color(0xff6B7A90),
-
-                            fontSize: 12,
-
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
         );
       },
+    );
+  }
+
+  Widget _buildChip(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.16),
+
+        borderRadius: BorderRadius.circular(999),
+
+        border: Border.all(color: Colors.white.withOpacity(0.18)),
+      ),
+
+      child: Text(
+        text,
+
+        style: const TextStyle(
+          color: Colors.white,
+
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }
