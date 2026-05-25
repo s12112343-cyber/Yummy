@@ -6,12 +6,13 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/auth_service.dart';
+import '../services/cart_service.dart';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
 class AuthProvider extends ChangeNotifier {
   AuthProvider({AuthService? authService})
-      : _authService = authService ?? AuthService();
+    : _authService = authService ?? AuthService();
 
   final AuthService _authService;
 
@@ -33,8 +34,7 @@ class AuthProvider extends ChangeNotifier {
     _token = await _authService.getToken();
     _userId = await _authService.getUserId();
 
-    final hasSession =
-        _rememberMe && _token != null && _token!.isNotEmpty;
+    final hasSession = _rememberMe && _token != null && _token!.isNotEmpty;
 
     _status = hasSession
         ? AuthStatus.authenticated
@@ -57,13 +57,8 @@ class AuthProvider extends ChangeNotifier {
     try {
       final response = await http.post(
         Uri.parse('${AppConfig.baseUrl}/auth/login'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'email': email,
-          'password': password,
-        }),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'password': password}),
       );
 
       final data = jsonDecode(response.body);
@@ -84,28 +79,18 @@ class AuthProvider extends ChangeNotifier {
         final user = data['user'];
 
         if (user != null) {
-          final savedUserId =
-              user['id'] ?? user['_id'] ?? data['userId'];
+          final savedUserId = user['id'] ?? user['_id'] ?? data['userId'];
 
           if (savedUserId != null) {
             await prefs.setString('userId', savedUserId.toString());
             _userId = savedUserId.toString();
           }
 
-          await prefs.setString(
-            'userName',
-            user['name']?.toString() ?? '',
-          );
+          await prefs.setString('userName', user['name']?.toString() ?? '');
 
-          await prefs.setString(
-            'userEmail',
-            user['email']?.toString() ?? '',
-          );
+          await prefs.setString('userEmail', user['email']?.toString() ?? '');
 
-          await prefs.setString(
-            'userRole',
-            user['role']?.toString() ?? '',
-          );
+          await prefs.setString('userRole', user['role']?.toString() ?? '');
 
           if (user['profileImage'] != null) {
             await prefs.setString(
@@ -114,10 +99,7 @@ class AuthProvider extends ChangeNotifier {
             );
           }
         } else if (data['userId'] != null) {
-          await prefs.setString(
-            'userId',
-            data['userId'].toString(),
-          );
+          await prefs.setString('userId', data['userId'].toString());
           _userId = data['userId'].toString();
         }
 
@@ -130,33 +112,25 @@ class AuthProvider extends ChangeNotifier {
 
         if (_status == AuthStatus.authenticated) {
           await _authService.registerDeviceToken();
+          await CartService.init();
         }
 
         notifyListeners();
 
-        return {
-          'success': true,
-          'data': data,
-        };
+        return {'success': true, 'data': data};
       }
 
       _status = AuthStatus.unauthenticated;
       notifyListeners();
 
-      return {
-        'success': false,
-        'message': data['message'] ?? 'Login failed',
-      };
+      return {'success': false, 'message': data['message'] ?? 'Login failed'};
     } catch (e) {
       debugPrint("LOGIN ERROR => $e");
 
       _status = AuthStatus.unauthenticated;
       notifyListeners();
 
-      return {
-        'success': false,
-        'message': e.toString(),
-      };
+      return {'success': false, 'message': e.toString()};
     } finally {
       _setLoading(false);
     }
@@ -183,6 +157,7 @@ class AuthProvider extends ChangeNotifier {
 
       if (_status == AuthStatus.authenticated) {
         await _authService.registerDeviceToken();
+        await CartService.init();
       }
 
       notifyListeners();
@@ -202,6 +177,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     await _authService.logout();
     await _authService.setRememberMePreference(false);
+    CartService.reset();
 
     _token = null;
     _userId = null;

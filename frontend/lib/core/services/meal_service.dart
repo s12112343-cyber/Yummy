@@ -55,6 +55,7 @@ class MealService {
     required String mealType,
     required DateTime date,
     required List<Map<String, dynamic>> meals,
+    bool bypassRestrictions = false,
   }) async {
     final response = await http
         .post(
@@ -64,6 +65,7 @@ class MealService {
             'mealType': mealType,
             'dateKey': _toDateKey(date),
             'meals': meals,
+            if (bypassRestrictions) 'bypassRestrictions': true,
           }),
         )
         .timeout(AppConfig.requestTimeout);

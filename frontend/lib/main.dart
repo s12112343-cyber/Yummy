@@ -9,6 +9,7 @@ import 'core/providers/home_provider.dart';
 import 'core/providers/user_provider.dart';
 import 'core/providers/like_provider.dart';
 import 'core/providers/follow_provider.dart';
+import 'core/services/cart_service.dart';
 
 import 'core/services/firebase_notification_handler.dart';
 import 'core/navigation/app_navigator.dart';
@@ -19,9 +20,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Lock app orientation
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   // Firebase initialization
   if (kIsWeb) {
@@ -43,24 +42,16 @@ Future<void> main() async {
     await setupFirebaseNotifications();
   }
 
+  await CartService.init();
+
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(
-          create: (_) => AuthProvider()..initialize(),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => UserProvider(),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => HomeProvider(),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => LikeProvider(),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => FollowProvider(),
-        ),
+        ChangeNotifierProvider(create: (_) => AuthProvider()..initialize()),
+        ChangeNotifierProvider(create: (_) => UserProvider()),
+        ChangeNotifierProvider(create: (_) => HomeProvider()),
+        ChangeNotifierProvider(create: (_) => LikeProvider()),
+        ChangeNotifierProvider(create: (_) => FollowProvider()),
       ],
       child: const YummyApp(),
     ),

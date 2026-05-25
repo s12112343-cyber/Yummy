@@ -24,6 +24,7 @@ const createOrder = async (req, res) => {
     const order = await Order.create({
       chefId: req.body.chefId,
       userId: userId, // ✅ من التوكن مش من Flutter
+      recipeId: req.body.recipeId || req.body.id || req.body._id || null,
 
       dishName: req.body.dishName || '',
       dishImage: req.body.dishImage || '',
@@ -33,6 +34,13 @@ const createOrder = async (req, res) => {
       quantity: req.body.quantity || 1,
       price: req.body.price || 0,
       totalPrice: req.body.totalPrice || 0,
+
+      // optional size & nutrition
+      size: req.body.size || '',
+      calories: req.body.calories || 0,
+      fat: req.body.fat || 0,
+      protein: req.body.protein || 0,
+      carbs: req.body.carbs || 0,
 
       phone: req.body.phone || '',
       city: req.body.city || '',
@@ -157,6 +165,40 @@ async (req, res) => {
 
       success: false,
 
+      message: e.message,
+    });
+  }
+};
+
+//
+// ✅ GET USER ORDERS
+//
+const getUserOrders = async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized: userId not found in token',
+      });
+    }
+
+    const orders = await Order.find({ userId })
+      .sort({
+        createdAt: -1,
+      })
+      .populate('chefId', 'name businessName image avatar');
+
+    res.json({
+      success: true,
+      orders,
+    });
+  } catch (e) {
+    console.log('GET USER ORDERS ERROR =>', e);
+
+    res.status(500).json({
+      success: false,
       message: e.message,
     });
   }
@@ -332,6 +374,85 @@ async (req, res) => {
   }
 };
 
+//
+// ✅ CANCEL USER ORDER
+//
+const cancelUserOrder = async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized: userId not found in token',
+      });
+    }
+
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found',
+      });
+    }
+
+    if (order.userId.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: this order does not belong to you',
+      });
+    }
+
+    if (order.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only pending orders can be cancelled',
+      });
+    }
+
+    order.status = 'cancelled';
+    await order.save();
+
+    const chef = await Chef.findById(order.chefId);
+
+    if (chef) {
+      const notification = await Notification.create({
+        recipientId: chef.userId.toString(),
+        actorId: userId.toString(),
+        actorName: order.customerName || 'Customer',
+        actorImageUrl: order.customerAvatar || '',
+        type: 'order_status',
+        title: 'Order Cancelled ❌',
+        body: `${order.customerName || 'Customer'} cancelled the order`,
+        isRead: false,
+        payload: {
+          orderId: order._id,
+          status: order.status,
+        },
+      });
+
+      const io = req.app.get('io');
+
+      if (io) {
+        io.to(chef.userId.toString()).emit('newNotification', notification);
+      }
+    }
+
+    res.json({
+      success: true,
+      order,
+    });
+  } catch (e) {
+    console.log('CANCEL USER ORDER ERROR =>', e);
+
+    res.status(500).json({
+      success: false,
+      message: e.message,
+    });
+  }
+};
+
 module.exports = {
 
   createOrder,
@@ -340,6 +461,10 @@ module.exports = {
 
   getAllOrders,
 
+  getUserOrders,
+
   updateOrderStatus,
+
+  cancelUserOrder,
 };
 

@@ -280,7 +280,7 @@ class _ChefProfileScreenState extends State<ChefProfileScreen>
             'calories': item['calories'] ?? 0,
             'fat': item['fat'] ?? 0,
             'protein': item['protein'] ?? 0,
-            'potassium': item['potassium'] ?? 0,
+            'carbs': item['carbs'] ?? item['potassium'] ?? 0,
             'ingredients': item['ingredients'] ?? [],
             'unknownIngredients': item['unknownIngredients'] ?? [],
             'chefName': item['chef']?['name'] ?? '',

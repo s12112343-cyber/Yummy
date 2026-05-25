@@ -7,7 +7,9 @@ const {
   createOrder,
   getChefOrders,
   getAllOrders,
+  getUserOrders,
   updateOrderStatus,
+  cancelUserOrder,
 
 } = require('../controllers/orderController');
 
@@ -35,6 +37,15 @@ router.get(
   getAllOrders,
 );
 
+// ✅ GET LOGGED-IN USER ORDERS
+router.get(
+  '/my',
+
+  verifyToken,
+
+  getUserOrders,
+);
+
 // ✅ UPDATE ORDER STATUS
 router.put(
   '/:id/status',
@@ -42,6 +53,24 @@ router.put(
   verifyToken,
 
   updateOrderStatus,
+);
+
+// ✅ CANCEL LOGGED-IN USER ORDER
+router.put(
+  '/:id/cancel',
+
+  verifyToken,
+
+  cancelUserOrder,
+);
+
+// Support POST for cancel as well (some clients may send POST instead of PUT)
+router.post(
+  '/:id/cancel',
+
+  verifyToken,
+
+  cancelUserOrder,
 );
 
 module.exports = router;

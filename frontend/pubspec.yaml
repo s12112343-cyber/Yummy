@@ -43,10 +43,10 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/images/logo-notification.png"
+  image_path: "assets/images/logo_white.png"
   adaptive_icon_background: "#001F5B"
-  adaptive_icon_foreground: "assets/images/logo-notification.png"
-  remove_alpha_ios: true
+  adaptive_icon_foreground: "assets/images/logo_white_foreground.png"
+  remove_alpha_ios: false
 
 flutter:
   uses-material-design: true

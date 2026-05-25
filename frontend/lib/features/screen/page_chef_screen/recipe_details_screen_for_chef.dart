@@ -396,8 +396,8 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
             _buildNutritionCard('${recipe['fat'] ?? 0}', 'Fat', _kAccentOrange),
 
             _buildNutritionCard(
-              '${recipe['potassium'] ?? 0}',
-              'Potassium',
+              '${recipe['carbs'] ?? recipe['potassium'] ?? 0}',
+              'Carbs',
               _kAccent,
             ),
           ],

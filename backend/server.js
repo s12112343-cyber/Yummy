@@ -87,6 +87,7 @@ app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/user-profile", require("./routes/userProfileRoutes"));
 app.use("/api/follow", require("./routes/followRoutes"));
 app.use("/api/notifications", require("./routes/notificationRoutes"));
+app.use("/api/cart", require("./routes/cartRoutes"));
 
 // Old project routes
 app.use("/api/users", require("./routes/userRoutes"));

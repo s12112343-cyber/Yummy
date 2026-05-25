@@ -96,6 +96,8 @@ const addMealsBatch = async (req, res) => {
     const mealType = (req.body.mealType || "").toString().trim().toLowerCase();
     const dateKey = toDateKey(req.body.dateKey);
     const meals = Array.isArray(req.body.meals) ? req.body.meals : [];
+    const bypassRestrictions =
+      req.body.bypassRestrictions === true || req.body.bypassRestrictions === "true";
 
     if (!allowedMealTypes.has(mealType)) {
       return res.status(400).json({ message: "Invalid meal type" });
@@ -148,7 +150,7 @@ const addMealsBatch = async (req, res) => {
           restrictions
         );
 
-        if (restrictionResult.hasBlockedIssues) {
+        if (restrictionResult.hasBlockedIssues && !bypassRestrictions) {
           blockingIssues.push({
             mealName,
             issues: restrictionResult.issues,
@@ -187,6 +189,7 @@ const addMealsBatch = async (req, res) => {
     return res.status(201).json({
       message: "Meals saved successfully",
       savedCount: docs.length,
+      warnings: bypassRestrictions ? blockingIssues : undefined,
     });
   } catch (error) {
     console.error("Error saving meals:", error.message);

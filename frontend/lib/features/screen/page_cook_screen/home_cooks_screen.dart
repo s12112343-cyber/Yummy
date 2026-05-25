@@ -258,20 +258,26 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
         final d = jsonDecode(r.body);
         if (mounted) {
           setState(() {
-            _trendingRecipes = (d['data'] ?? []).map((item) {
-              String image = fullImageUrl(
-                item['image'] ?? item['dishImage'] ?? item['photo'] ?? '',
+            _trendingRecipes = (d['data'] ?? []).map<Map<String, dynamic>>((
+              item,
+            ) {
+              final Map<String, dynamic> m = Map<String, dynamic>.from(
+                item ?? {},
               );
 
-              return {
-                ...item,
+              final String image = fullImageUrl(
+                m['image'] ?? m['dishImage'] ?? m['photo'] ?? '',
+              );
 
-                'image': image,
+              m['image'] = image;
+              m['chefName'] = (m['chef'] is Map)
+                  ? (m['chef']['name'] ?? '')
+                  : (m['chefName'] ?? '');
+              m['chefImage'] = (m['chef'] is Map)
+                  ? (m['chef']['profileImage'] ?? '')
+                  : (m['chefImage'] ?? '');
 
-                'chefName': item['chef']?['name'] ?? '',
-
-                'chefImage': item['chef']?['profileImage'] ?? '',
-              };
+              return m;
             }).toList();
             _loadingTrending = false;
           });

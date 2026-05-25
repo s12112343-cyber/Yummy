@@ -753,6 +753,7 @@ class _HomeScreenState extends State<HomeScreen>
     final bool isCompleted =
         hasMeal && targetCalories > 0 && mealCalories >= targetCalories;
     final bool isPartial = hasMeal && !isCompleted;
+    final mealDisplayText = _mealDisplayText(meal.mealName, maxItems: 3);
 
     return GestureDetector(
       onTap: () => _goToAddMealScreen(meal),
@@ -827,16 +828,18 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                     if (!hasMeal) const SizedBox(height: 8),
                     if (isPartial)
-                      Text(
-                        meal.mealName!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white.withOpacity(0.95),
-                        ),
-                      ),
+  Text(
+    mealDisplayText,
+    maxLines: 3,
+    overflow: TextOverflow.visible,
+    softWrap: true,
+    style: TextStyle(
+      fontSize: 11.5,
+      fontWeight: FontWeight.w600,
+      color: Colors.white.withOpacity(0.95),
+      height: 1.16,
+    ),
+  ),
                     if (isPartial) const SizedBox(height: 4),
                     if (isPartial)
                       Column(
@@ -861,18 +864,19 @@ class _HomeScreenState extends State<HomeScreen>
                           ),
                         ],
                       ),
-                    if (isCompleted)
-                      Text(
-                        meal.mealName!,
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white.withOpacity(0.95),
-                          height: 1.25,
-                        ),
-                      ),
+                   if (isCompleted)
+  Text(
+    mealDisplayText,
+    maxLines: 3,
+    overflow: TextOverflow.visible,
+    softWrap: true,
+    style: TextStyle(
+      fontSize: 11.5,
+      fontWeight: FontWeight.w600,
+      color: Colors.white.withOpacity(0.95),
+      height: 1.16,
+    ),
+  ),
                     const Spacer(),
                     if (isCompleted)
                       Center(
@@ -1318,6 +1322,22 @@ class _HomeScreenState extends State<HomeScreen>
     if (target <= 0) return 0;
     return ((_mealLeftCalories(meal) / target) * 100).round().clamp(0, 100);
   }
+
+  String _mealDisplayText(String? mealName, {int maxItems = 3}) {
+  final allLines = (mealName ?? '')
+      .split('\n')
+      .map((line) => line.trim())
+      .where((line) => line.isNotEmpty)
+      .toList();
+
+  if (allLines.isEmpty) return '';
+
+  final count = allLines.length >= maxItems ? maxItems : allLines.length;
+
+  return allLines
+      .skip(allLines.length - count)
+      .join('\n');
+}
 
   Future<void> _goToAddMealScreen(MealCardData meal) async {
     await Navigator.of(context).push(

@@ -8,7 +8,6 @@ import 'dart:convert';
 import '../../../core/services/cart_service.dart';
 import '../../../core/services/favorite_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'CartScreen.dart';
 
 String fullImageUrl(dynamic image) {
   if (image == null) return '';
@@ -135,9 +134,11 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
 
   int get _protein => _readInt(widget.recipe['protein'], fallback: 0);
 
-  int get _potassium => _readInt(widget.recipe['potassium'], fallback: 0);
+  int get _carbs => _readInt(
+    widget.recipe['carbs'] ?? widget.recipe['potassium'],
+    fallback: 0,
+  );
   double get _basePrice => _readDouble(widget.recipe['price'], fallback: 25.00);
-
   double get _sizeAdjustment => _sizePrices[_selectedSize] ?? 0.00;
 
   double get _adjustedPrice => _basePrice + _sizeAdjustment;
@@ -287,7 +288,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
         "calories": double.parse(cal.isEmpty ? "0" : cal),
         "fat": double.parse(fat.isEmpty ? "0" : fat),
         "protein": double.parse(protein.isEmpty ? "0" : protein),
-        "potassium": double.parse(pot.isEmpty ? "0" : pot),
+        "carbs": double.parse(pot.isEmpty ? "0" : pot),
       }),
     );
 
@@ -306,6 +307,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       '_id': _recipeId,
 
       'id': _recipeId,
+      'recipeId': _recipeId,
 
       'price': _adjustedPrice,
 
@@ -315,6 +317,16 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
 
       'chefName':
           widget.recipe['chef']?['name'] ?? widget.recipe['chefName'] ?? '',
+      // include selected size and nutrition fields
+      'size': _selectedSize ?? '',
+      'calories': widget.recipe['calories'] ?? widget.recipe['cal'] ?? 0,
+      'fat': widget.recipe['fat'] ?? 0,
+      'protein': widget.recipe['protein'] ?? 0,
+      'carbs':
+          widget.recipe['carbs'] ??
+          widget.recipe['carbohydrates'] ??
+          widget.recipe['potassium'] ??
+          0,
     };
 
     await CartService.addItem(item);
@@ -753,7 +765,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
           children: [
             _buildNutritionCircle(_fat, 'Fat', 'g'),
             _buildNutritionCircle(_calories, 'Calories', ''),
-            _buildNutritionCircle(_potassium, 'Potassium', 'mg'),
+            _buildNutritionCircle(_carbs, 'Carbs', 'g'),
             _buildNutritionCircle(_protein, 'Protein', 'g'),
           ],
         ),
@@ -1151,7 +1163,9 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                         proteinController.text =
                             data['protein']?.toString() ?? '';
                         potController.text =
-                            data['potassium']?.toString() ?? '';
+                            data['carbs']?.toString() ??
+                            data['potassium']?.toString() ??
+                            '';
                       }
                     } catch (e) {
                       print("❌ Error loading nutrition");
@@ -1204,7 +1218,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                   readOnly: true, // 🔥 هون
 
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: "Potassium"),
+                  decoration: const InputDecoration(labelText: "Carbs"),
                 ),
               ],
             ),

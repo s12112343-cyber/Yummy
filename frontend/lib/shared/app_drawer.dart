@@ -5,6 +5,7 @@ import '../core/theme/app_colors.dart';
 import '../features/meal_history/meal_history_screen.dart';
 import '../features/profile/personal_details_screen.dart';
 import '../features/profile/user_profile_screen.dart';
+import '../features/screen/page_cook_screen/my_orders_screen.dart';
 import '../features/auth/welcome_screen.dart';
 import '../features/about/about_us_page.dart';
 
@@ -276,6 +277,27 @@ class AppDrawer extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (_) => const PersonalDetailsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+
+                  _menuTile(
+                    context,
+                    icon: Icons.receipt_long_outlined,
+                    title: "My Order",
+                    subtitle: "See current and past orders",
+                    onTap: () {
+                      Navigator.pop(context);
+                      if (onOrdersTap != null) {
+                        onOrdersTap!.call();
+                        return;
+                      }
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const MyOrdersScreen(),
                         ),
                       );
                     },

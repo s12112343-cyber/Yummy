@@ -8,6 +8,12 @@ const orderSchema = new mongoose.Schema(
       required: true,
     },
 
+    recipeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Recipe',
+      default: null,
+    },
+
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -72,6 +78,32 @@ const orderSchema = new mongoose.Schema(
     specialInstructions: {
       type: String,
       default: '',
+    },
+
+    // Optional size and nutrition fields captured from the order
+    size: {
+      type: String,
+      default: '',
+    },
+
+    calories: {
+      type: Number,
+      default: 0,
+    },
+
+    fat: {
+      type: Number,
+      default: 0,
+    },
+
+    protein: {
+      type: Number,
+      default: 0,
+    },
+
+    carbs: {
+      type: Number,
+      default: 0,
     },
 
     status: {

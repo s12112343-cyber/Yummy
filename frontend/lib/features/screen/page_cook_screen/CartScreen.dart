@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/services/cart_service.dart';
 import 'checkout_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/config/app_config.dart';
 
 // ─── Colors ────────────────────────────────────────────────────────────────
@@ -133,6 +133,49 @@ class _CartScreenState extends State<CartScreen> {
                         fontWeight: FontWeight.w900,
                         color: _kBlue,
                       ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // Display selected size if available
+                    if ((item['size'] ?? '').toString().isNotEmpty) ...[
+                      Text(
+                        'Size: ${item['size']}',
+                        style: const TextStyle(fontSize: 13, color: _kTextDim),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
+                    // Nutrition per item
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _nutrientSmall(
+                          'Cal',
+                          (item['calories'] ?? item['cal'] ?? 0).toString(),
+                          color: AppColors.caloriesPurple,
+                          bgColor: AppColors.caloriesBg,
+                        ),
+                        _nutrientSmall(
+                          'Fat',
+                          (item['fat'] ?? 0).toString(),
+                          color: AppColors.fatOrange,
+                          bgColor: AppColors.fatBg,
+                        ),
+                        _nutrientSmall(
+                          'Protein',
+                          (item['protein'] ?? 0).toString(),
+                          color: AppColors.proteinBlue,
+                          bgColor: AppColors.proteinBg,
+                        ),
+                        _nutrientSmall(
+                          'Carbs',
+                          (item['carbs'] ?? item['carbohydrates'] ?? 0)
+                              .toString(),
+                          color: AppColors.carbsGreen,
+                          bgColor: AppColors.carbsBg,
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -366,6 +409,43 @@ class _CartScreenState extends State<CartScreen> {
           shape: BoxShape.circle,
         ),
         child: Icon(icon, size: 18, color: _kBlue),
+      ),
+    );
+  }
+
+  Widget _nutrientSmall(
+    String label,
+    String value, {
+    Color? color,
+    Color? bgColor,
+  }) {
+    final Color fg = color ?? _kText;
+    final Color background = bgColor ?? Colors.white;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: (color ?? _kText).withOpacity(0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 12, color: fg.withOpacity(0.9)),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: fg,
+            ),
+          ),
+        ],
       ),
     );
   }
