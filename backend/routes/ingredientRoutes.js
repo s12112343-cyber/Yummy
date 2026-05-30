@@ -3,6 +3,22 @@ const router = express.Router();
 const Ingredient = require('../models/Ingredient');
 const Recipe = require('../models/Recipe');
 const calculateNutrition = require('../utils/calcNutrition');
+const { searchSpoonacularIngredients } = require('../services/spoonacularIngredientService');
+
+function _escapeRegex(value) {
+  return (value ?? '')
+    .toString()
+    .trim()
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function _toIngredientPayload(ingredient) {
+  return {
+    name: ingredient.name,
+    imageUrl: null,
+    source: 'local',
+  };
+}
 
 // 🔥 ADD + AUTO UPDATE
 router.post('/add', async (req, res) => {
@@ -33,13 +49,48 @@ router.post('/add', async (req, res) => {
 
 // 🔥 SEARCH
 router.get('/search', async (req, res) => {
-  const query = req.query.q;
+  try {
+    const query = (req.query.q ?? '').toString().trim();
 
-  const results = await Ingredient.find({
-    name: { $regex: query, $options: 'i' }
-  }).limit(10);
+    if (!query) {
+      return res.json([]);
+    }
 
-  res.json(results);
+    const escapedQuery = _escapeRegex(query);
+
+    const [localResults, spoonacularResults] = await Promise.all([
+      Ingredient.find({
+        name: { $regex: escapedQuery, $options: 'i' },
+      }).limit(10),
+      searchSpoonacularIngredients(query, 10),
+    ]);
+
+    const combinedResults = [];
+    const seenNames = new Set();
+
+    for (const ingredient of localResults.map(_toIngredientPayload)) {
+      const key = ingredient.name.toLowerCase();
+
+      if (!seenNames.has(key)) {
+        seenNames.add(key);
+        combinedResults.push(ingredient);
+      }
+    }
+
+    for (const ingredient of spoonacularResults) {
+      const key = ingredient.name.toLowerCase();
+
+      if (!seenNames.has(key)) {
+        seenNames.add(key);
+        combinedResults.push(ingredient);
+      }
+    }
+
+    return res.json(combinedResults.slice(0, 10));
+  } catch (error) {
+    console.error('Ingredient search failed:', error.message);
+    return res.status(500).json({ message: 'Failed to search ingredients' });
+  }
 });
 
 // 🔥 GET BY NAME

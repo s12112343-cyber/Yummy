@@ -7,6 +7,7 @@ const path = require("path");
 
 const connectDB = require("./config/db");
 const externalRecipeRoutes = require("./routes/external_recipe_routes");
+const ingredientRoutes = require("./routes/ingredientRoutes");
 
 dotenv.config();
 connectDB();
@@ -90,6 +91,7 @@ app.use("/api/follow", require("./routes/followRoutes"));
 app.use("/api/notifications", require("./routes/notificationRoutes"));
 app.use("/api/cart", require("./routes/cartRoutes"));
 app.use("/api/external-recipes", externalRecipeRoutes);
+app.use("/api/ingredients", ingredientRoutes);
 
 // Old project routes
 app.use("/api/users", require("./routes/userRoutes"));

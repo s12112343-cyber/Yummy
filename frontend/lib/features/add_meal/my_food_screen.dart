@@ -197,7 +197,6 @@ class _MyFoodScreenPanelState extends State<MyFoodScreenPanel> {
 
   Widget _buildMealCard(PreviousMealTemplate meal) {
     final Color mealColor = _mealColor(meal.mealType);
-    final List<Color> gradientColors = _mealGradientColors(meal.mealType);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),

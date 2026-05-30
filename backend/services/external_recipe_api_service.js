@@ -2,6 +2,7 @@ const axios = require("axios");
 
 const THE_MEAL_DB_BASE_URL = "https://www.themealdb.com/api/json/v1/1";
 const SPOONACULAR_BASE_URL = "https://api.spoonacular.com";
+const REQUEST_TIMEOUT_MS = 8000;
 
 function extractIngredients(meal) {
   const ingredients = [];
@@ -64,6 +65,7 @@ async function getNutritionFromSpoonacular(title) {
           number: 1,
           addRecipeNutrition: true,
         },
+        timeout: REQUEST_TIMEOUT_MS,
       }
     );
 
@@ -200,6 +202,7 @@ async function searchMeals(searchText = "") {
     params: {
       s: query,
     },
+    timeout: REQUEST_TIMEOUT_MS,
   });
 
   const meals = response.data.meals || [];
@@ -258,26 +261,20 @@ async function getRandomMeals() {
     // ==========================
 
     for (const keyword of searchKeywords) {
-
-      const response =
-          await axios.get(
-
-        `${THE_MEAL_DB_BASE_URL}/search.php`,
-
-        {
+      try {
+        const response = await axios.get(`${THE_MEAL_DB_BASE_URL}/search.php`, {
           params: {
             s: keyword,
           },
-        },
-      );
+          timeout: REQUEST_TIMEOUT_MS,
+        });
 
-      const meals =
-          response.data.meals || [];
+        const meals = response.data.meals || [];
 
-      allMeals = [
-        ...allMeals,
-        ...meals,
-      ];
+        allMeals = [...allMeals, ...meals];
+      } catch (error) {
+        console.log("Random meals keyword error:", keyword, error.message);
+      }
     }
 
     // ==========================
@@ -337,6 +334,7 @@ async function getMealById(id) {
     params: {
       i: id,
     },
+    timeout: REQUEST_TIMEOUT_MS,
   });
 
   const meal = response.data.meals?.[0];

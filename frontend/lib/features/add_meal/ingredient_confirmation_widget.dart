@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../core/theme/app_colors.dart';
 
 // ============================================================================
 // INGREDIENT CONFIRMATION WIDGET
@@ -93,7 +92,6 @@ class _IngredientConfirmationWidgetState
   static const Color _pageBg = Color(0xFFF8FAFD);
   static const Color _cardBorder = Color(0xFFE7EEF8);
   static const Color _mutedText = Color(0xFF66758A);
-  static const Color _softNavy = Color(0xFFF1F5FB);
   static const Color _white = Colors.white;
   static const Color _greenConfirm = Color(0xFF10B981);
   static const Color _redReject = Color(0xFFEF4444);

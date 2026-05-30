@@ -121,10 +121,7 @@ class _RecipeCardsSectionState extends State<RecipeCardsSection> {
 
         if (snapshot.hasError) {
           return const Center(
-            child: Text(
-              "Something went wrong 😭",
-              style: TextStyle(fontSize: 18),
-            ),
+            child: Text("Something went wrong", style: TextStyle(fontSize: 18)),
           );
         }
 
@@ -473,7 +470,7 @@ class _RecipeCardsSectionState extends State<RecipeCardsSection> {
                     SizedBox(height: 140),
                     Center(
                       child: Text(
-                        "No recipes found 😭",
+                        "No recipes found",
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
