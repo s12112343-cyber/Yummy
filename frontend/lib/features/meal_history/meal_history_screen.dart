@@ -1,8 +1,16 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:csv/csv.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/providers/user_provider.dart';
@@ -10,6 +18,8 @@ import '../../core/services/meal_service.dart';
 import '../../core/theme/app_colors.dart';
 
 enum _PeriodOption { today, week, month, all, custom }
+
+enum _ExportFormat { csv, pdf }
 
 extension _PeriodOptionX on _PeriodOption {
   String get apiValue {
@@ -57,6 +67,8 @@ class _MealHistoryScreenState extends State<MealHistoryScreen> {
   _PeriodOption _selectedPeriod = _PeriodOption.week;
   DateTime? _customDate;
   Future<_PeriodSummaryData>? _loadFuture;
+  _PeriodSummaryData? _currentSummary;
+  bool _isExporting = false;
 
   @override
   void initState() {
@@ -65,21 +77,24 @@ class _MealHistoryScreenState extends State<MealHistoryScreen> {
   }
 
   Future<_PeriodSummaryData> _loadSummary() async {
+    late final _PeriodSummaryData summary;
+
     if (_selectedPeriod == _PeriodOption.today) {
       final response = await _mealService.getDailySummary(DateTime.now());
-      return _PeriodSummaryData.fromDailyJson(response);
-    }
-
-    if (_selectedPeriod == _PeriodOption.custom) {
+      summary = _PeriodSummaryData.fromDailyJson(response);
+    } else if (_selectedPeriod == _PeriodOption.custom) {
       final date = _customDate ?? DateTime.now();
       final response = await _mealService.getDailySummary(date);
-      return _PeriodSummaryData.fromDailyJson(response);
+      summary = _PeriodSummaryData.fromDailyJson(response);
+    } else {
+      final response = await _mealService.getPeriodSummary(
+        period: _selectedPeriod.apiValue,
+      );
+      summary = _PeriodSummaryData.fromPeriodJson(response);
     }
 
-    final response = await _mealService.getPeriodSummary(
-      period: _selectedPeriod.apiValue,
-    );
-    return _PeriodSummaryData.fromPeriodJson(response);
+    _currentSummary = summary;
+    return summary;
   }
 
   Future<void> _refresh() async {
@@ -96,6 +111,563 @@ class _MealHistoryScreenState extends State<MealHistoryScreen> {
       _selectedPeriod = period;
       _loadFuture = _loadSummary();
     });
+  }
+
+  Future<void> _handleExport(_ExportFormat format) async {
+    if (_isExporting) return;
+
+    setState(() {
+      _isExporting = true;
+    });
+
+    try {
+      final summary = _currentSummary ?? await _loadSummary();
+
+      if (!mounted) return;
+
+      late final File file;
+      late final String previewText;
+
+      if (format == _ExportFormat.csv) {
+        final result = await _createCsvFile(summary);
+        file = result.file;
+        previewText = result.previewText;
+      } else {
+        file = await _createPdfFile(summary);
+        previewText = _buildPreviewText(summary);
+      }
+
+      if (!mounted) return;
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => _ExportPreviewScreen(
+            format: format,
+            file: file,
+            summary: summary,
+            previewText: previewText,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExporting = false;
+        });
+      }
+    }
+  }
+
+  Future<_CsvExportResult> _createCsvFile(_PeriodSummaryData summary) async {
+    final generatedAt = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+
+    final rows = <List<String>>[
+      ['MEAL HISTORY EXPORT'],
+      ['Generated at', generatedAt],
+      ['Period', summary.label],
+      [],
+      ['SUMMARY'],
+      ['Metric', 'Value', 'Unit'],
+      ['Calories', summary.calories.toString(), 'kcal'],
+      ['Protein', summary.protein.toString(), 'g'],
+      ['Carbs', summary.carbs.toString(), 'g'],
+      ['Fat', summary.fat.toString(), 'g'],
+      ['Water consumed', summary.waterConsumedMl.toString(), 'ml'],
+      ['Meal count', summary.mealCount.toString(), 'items'],
+      ['Days with meals', summary.daysWithMeals.toString(), 'days'],
+      ['Days with water', summary.daysWithWater.toString(), 'days'],
+      [
+        'Average calories per day',
+        summary.averageCaloriesPerDay.toStringAsFixed(0),
+        'kcal/day',
+      ],
+      [
+        'Average water per day',
+        summary.averageWaterPerDay.toStringAsFixed(0),
+        'ml/day',
+      ],
+      ['Daily water goal', summary.dailyWaterGoalMl.toString(), 'ml'],
+      [],
+      ['MACRO BALANCE'],
+      ['Macro', 'Grams', 'Percent'],
+      [
+        'Protein',
+        summary.protein.toString(),
+        '${(summary.macroPercentages['protein'] ?? 0).toStringAsFixed(0)}%',
+      ],
+      [
+        'Carbs',
+        summary.carbs.toString(),
+        '${(summary.macroPercentages['carbs'] ?? 0).toStringAsFixed(0)}%',
+      ],
+      [
+        'Fat',
+        summary.fat.toString(),
+        '${(summary.macroPercentages['fat'] ?? 0).toStringAsFixed(0)}%',
+      ],
+      [],
+      ['MEAL TYPE SUMMARY'],
+      ['Meal type', 'Count', 'Calories'],
+      ...const ['breakfast', 'lunch', 'snack', 'dinner'].map(
+        (type) => [
+          _mealLabel(type),
+          (summary.mealTypeCounts[type] ?? 0).toString(),
+          (summary.mealTypeCalories[type] ?? 0).toString(),
+        ],
+      ),
+      [],
+      ['MEALS DETAILS'],
+      [
+        'Date',
+        'Meal type',
+        'Meal name',
+        'Calories',
+        'Protein (g)',
+        'Carbs (g)',
+        'Fat (g)',
+      ],
+      ...summary.mealItems.map(
+        (item) => [
+          item.dateKey ?? '',
+          _mealLabel(item.mealType),
+          item.mealName,
+          item.calories.toString(),
+          item.protein.toString(),
+          item.carbs.toString(),
+          item.fat.toString(),
+        ],
+      ),
+    ];
+
+    final csv = const ListToCsvConverter().convert(rows);
+    final directory = await getTemporaryDirectory();
+    final safeLabel = summary.label.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
+    final file = File('${directory.path}/meal_history_$safeLabel.csv');
+
+    await file.writeAsString(csv, flush: true);
+
+    return _CsvExportResult(
+      file: file,
+      previewText: _buildPreviewText(summary),
+    );
+  }
+
+  Future<File> _createPdfFile(_PeriodSummaryData summary) async {
+    final fontData = await rootBundle.load('assets/fonts/ARIALUNI.ttf');
+    final regularFont = pw.Font.ttf(fontData);
+    final boldFont = pw.Font.ttf(fontData);
+
+    final pdf = pw.Document();
+    final generatedAt = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+
+    pw.TextStyle style({
+      double size = 10,
+      bool bold = false,
+      PdfColor color = PdfColors.blueGrey900,
+    }) {
+      return pw.TextStyle(
+        font: bold ? boldFont : regularFont,
+        fontSize: size,
+        color: color,
+      );
+    }
+
+    pw.Widget sectionTitle(String title) {
+      return pw.Padding(
+        padding: const pw.EdgeInsets.only(top: 14, bottom: 8),
+        child: pw.Text(
+          title,
+          style: style(size: 15, bold: true, color: PdfColors.blue900),
+        ),
+      );
+    }
+
+    pw.Widget metricCard({
+      required String title,
+      required String value,
+      required String subtitle,
+      required PdfColor color,
+    }) {
+      return pw.Container(
+        padding: const pw.EdgeInsets.all(12),
+        decoration: pw.BoxDecoration(
+          color: PdfColors.grey100,
+          borderRadius: pw.BorderRadius.circular(12),
+          border: pw.Border.all(color: PdfColors.grey300, width: 0.7),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(title, style: style(size: 9, bold: true, color: color)),
+            pw.SizedBox(height: 6),
+            pw.Text(
+              value,
+              style: style(size: 19, bold: true, color: PdfColors.blueGrey900),
+            ),
+            pw.SizedBox(height: 3),
+            pw.Text(
+              subtitle,
+              style: style(size: 8, color: PdfColors.blueGrey600),
+            ),
+          ],
+        ),
+      );
+    }
+
+    pw.Widget miniMetric(String label, String value) {
+      return pw.Container(
+        padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: pw.BoxDecoration(
+          color: PdfColors.white,
+          borderRadius: pw.BorderRadius.circular(10),
+          border: pw.Border.all(color: PdfColors.grey300, width: 0.7),
+        ),
+        child: pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text(label, style: style(size: 9, color: PdfColors.blueGrey600)),
+            pw.Text(value, style: style(size: 10, bold: true)),
+          ],
+        ),
+      );
+    }
+
+    pw.Widget mealTypeSummaryTable() {
+      final rows = const ['breakfast', 'lunch', 'snack', 'dinner']
+          .map(
+            (type) => [
+              _mealLabel(type),
+              (summary.mealTypeCounts[type] ?? 0).toString(),
+              '${summary.mealTypeCalories[type] ?? 0} kcal',
+            ],
+          )
+          .toList();
+
+      return pw.Table.fromTextArray(
+        headers: const ['Meal Type', 'Count', 'Calories'],
+        data: rows,
+        border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+        headerDecoration: const pw.BoxDecoration(color: PdfColors.blue900),
+        headerStyle: style(size: 9, bold: true, color: PdfColors.white),
+        cellStyle: style(size: 9),
+        cellPadding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+        oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+        columnWidths: const {
+          0: pw.FlexColumnWidth(2),
+          1: pw.FlexColumnWidth(1),
+          2: pw.FlexColumnWidth(1.4),
+        },
+      );
+    }
+
+    pw.Widget mealsTable() {
+      if (summary.mealItems.isEmpty) {
+        return pw.Container(
+          width: double.infinity,
+          padding: const pw.EdgeInsets.all(14),
+          decoration: pw.BoxDecoration(
+            color: PdfColors.grey100,
+            borderRadius: pw.BorderRadius.circular(10),
+            border: pw.Border.all(color: PdfColors.grey300),
+          ),
+          child: pw.Text(
+            'No meals found for this period.',
+            style: style(size: 10, color: PdfColors.blueGrey600),
+          ),
+        );
+      }
+
+      return pw.Table.fromTextArray(
+        headers: const [
+          'Date',
+          'Meal Type',
+          'Meal Name',
+          'Calories',
+          'Protein',
+          'Carbs',
+          'Fat',
+        ],
+        data: summary.mealItems.map((item) {
+          return [
+            item.dateKey ?? '',
+            _mealLabel(item.mealType),
+            item.mealName,
+            '${item.calories} kcal',
+            '${item.protein} g',
+            '${item.carbs} g',
+            '${item.fat} g',
+          ];
+        }).toList(),
+        border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.45),
+        headerDecoration: const pw.BoxDecoration(color: PdfColors.blue900),
+        headerStyle: style(size: 8, bold: true, color: PdfColors.white),
+        cellStyle: style(size: 8),
+        cellPadding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 6),
+        oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+        cellAlignment: pw.Alignment.center,
+        headerAlignment: pw.Alignment.center,
+        columnWidths: const {
+          0: pw.FlexColumnWidth(1.1),
+          1: pw.FlexColumnWidth(1.2),
+          2: pw.FlexColumnWidth(2.4),
+          3: pw.FlexColumnWidth(1.1),
+          4: pw.FlexColumnWidth(1.0),
+          5: pw.FlexColumnWidth(1.0),
+          6: pw.FlexColumnWidth(0.9),
+        },
+      );
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(28),
+        theme: pw.ThemeData.withFont(base: regularFont, bold: boldFont),
+        footer: (context) {
+          return pw.Container(
+            alignment: pw.Alignment.centerRight,
+            margin: const pw.EdgeInsets.only(top: 12),
+            child: pw.Text(
+              'Page ${context.pageNumber} of ${context.pagesCount}',
+              style: style(size: 8, color: PdfColors.grey600),
+            ),
+          );
+        },
+        build: (context) => [
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.all(18),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.blue900,
+              borderRadius: pw.BorderRadius.circular(16),
+            ),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'Meal History Report',
+                        style: style(
+                          size: 23,
+                          bold: true,
+                          color: PdfColors.white,
+                        ),
+                      ),
+                      pw.SizedBox(height: 6),
+                      pw.Text(
+                        'Nutrition, water, and meals summary',
+                        style: style(size: 10, color: PdfColors.grey200),
+                      ),
+                    ],
+                  ),
+                ),
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.white,
+                    borderRadius: pw.BorderRadius.circular(10),
+                  ),
+                  child: pw.Text(
+                    summary.label,
+                    style: style(
+                      size: 10,
+                      bold: true,
+                      color: PdfColors.blue900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 10),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'Generated at: $generatedAt',
+                style: style(size: 9, color: PdfColors.blueGrey600),
+              ),
+              pw.Text(
+                'Meals: ${summary.mealCount}',
+                style: style(size: 9, bold: true, color: PdfColors.blueGrey700),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 16),
+          pw.Row(
+            children: [
+              pw.Expanded(
+                child: metricCard(
+                  title: 'Calories',
+                  value: '${summary.calories}',
+                  subtitle:
+                      'Avg ${summary.averageCaloriesPerDay.toStringAsFixed(0)} kcal/day',
+                  color: PdfColors.deepPurple,
+                ),
+              ),
+              pw.SizedBox(width: 10),
+              pw.Expanded(
+                child: metricCard(
+                  title: 'Water',
+                  value: '${summary.waterConsumedMl} ml',
+                  subtitle:
+                      'Avg ${summary.averageWaterPerDay.toStringAsFixed(0)} ml/day',
+                  color: PdfColors.cyan800,
+                ),
+              ),
+              pw.SizedBox(width: 10),
+              pw.Expanded(
+                child: metricCard(
+                  title: 'Meals',
+                  value: '${summary.mealCount}',
+                  subtitle: '${summary.daysWithMeals} active days',
+                  color: PdfColors.green800,
+                ),
+              ),
+            ],
+          ),
+          sectionTitle('Summary Details'),
+          pw.Container(
+            padding: const pw.EdgeInsets.all(12),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.grey50,
+              borderRadius: pw.BorderRadius.circular(12),
+              border: pw.Border.all(color: PdfColors.grey300),
+            ),
+            child: pw.Column(
+              children: [
+                miniMetric('Protein', '${summary.protein} g'),
+                pw.SizedBox(height: 6),
+                miniMetric('Carbs', '${summary.carbs} g'),
+                pw.SizedBox(height: 6),
+                miniMetric('Fat', '${summary.fat} g'),
+                pw.SizedBox(height: 6),
+                miniMetric(
+                  'Daily water goal',
+                  '${summary.dailyWaterGoalMl} ml',
+                ),
+                pw.SizedBox(height: 6),
+                miniMetric('Days with water', '${summary.daysWithWater}'),
+              ],
+            ),
+          ),
+          sectionTitle('Macro Balance'),
+          pw.Row(
+            children: [
+              pw.Expanded(
+                child: metricCard(
+                  title: 'Protein',
+                  value:
+                      '${(summary.macroPercentages['protein'] ?? 0).toStringAsFixed(0)}%',
+                  subtitle: '${summary.protein} g',
+                  color: PdfColors.blue800,
+                ),
+              ),
+              pw.SizedBox(width: 10),
+              pw.Expanded(
+                child: metricCard(
+                  title: 'Carbs',
+                  value:
+                      '${(summary.macroPercentages['carbs'] ?? 0).toStringAsFixed(0)}%',
+                  subtitle: '${summary.carbs} g',
+                  color: PdfColors.green800,
+                ),
+              ),
+              pw.SizedBox(width: 10),
+              pw.Expanded(
+                child: metricCard(
+                  title: 'Fat',
+                  value:
+                      '${(summary.macroPercentages['fat'] ?? 0).toStringAsFixed(0)}%',
+                  subtitle: '${summary.fat} g',
+                  color: PdfColors.orange800,
+                ),
+              ),
+            ],
+          ),
+          sectionTitle('Meal Type Summary'),
+          mealTypeSummaryTable(),
+          sectionTitle('Meals Details'),
+          mealsTable(),
+        ],
+      ),
+    );
+
+    final bytes = await pdf.save();
+    final safeLabel = summary.label.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
+    final directory = await getTemporaryDirectory();
+    final file = File('${directory.path}/meal_history_$safeLabel.pdf');
+
+    await file.writeAsBytes(bytes, flush: true);
+
+    return file;
+  }
+
+  String _buildPreviewText(_PeriodSummaryData summary) {
+    final buffer = StringBuffer();
+    final generatedAt = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+
+    buffer.writeln('MEAL HISTORY REPORT');
+    buffer.writeln('Generated at: $generatedAt');
+    buffer.writeln('Period: ${summary.label}');
+    buffer.writeln('');
+    buffer.writeln('SUMMARY');
+    buffer.writeln('Calories: ${summary.calories} kcal');
+    buffer.writeln(
+      'Average calories/day: ${summary.averageCaloriesPerDay.toStringAsFixed(0)} kcal',
+    );
+    buffer.writeln('Water: ${summary.waterConsumedMl} ml');
+    buffer.writeln(
+      'Average water/day: ${summary.averageWaterPerDay.toStringAsFixed(0)} ml',
+    );
+    buffer.writeln('Meals: ${summary.mealCount}');
+    buffer.writeln('Days with meals: ${summary.daysWithMeals}');
+    buffer.writeln('Daily water goal: ${summary.dailyWaterGoalMl} ml');
+    buffer.writeln('');
+    buffer.writeln('MACROS');
+    buffer.writeln(
+      'Protein: ${summary.protein}g (${(summary.macroPercentages['protein'] ?? 0).toStringAsFixed(0)}%)',
+    );
+    buffer.writeln(
+      'Carbs: ${summary.carbs}g (${(summary.macroPercentages['carbs'] ?? 0).toStringAsFixed(0)}%)',
+    );
+    buffer.writeln(
+      'Fat: ${summary.fat}g (${(summary.macroPercentages['fat'] ?? 0).toStringAsFixed(0)}%)',
+    );
+    buffer.writeln('');
+    buffer.writeln('MEAL TYPES');
+    for (final type in const ['breakfast', 'lunch', 'snack', 'dinner']) {
+      buffer.writeln(
+        '${_mealLabel(type)}: ${summary.mealTypeCounts[type] ?? 0} items, ${summary.mealTypeCalories[type] ?? 0} kcal',
+      );
+    }
+    buffer.writeln('');
+    buffer.writeln('MEALS DETAILS');
+
+    if (summary.mealItems.isEmpty) {
+      buffer.writeln('No meals found.');
+    } else {
+      for (final item in summary.mealItems) {
+        buffer.writeln(
+          '${item.dateKey ?? ''} | ${_mealLabel(item.mealType)} | ${item.mealName} | '
+          '${item.calories} kcal | Protein ${item.protein}g | Carbs ${item.carbs}g | Fat ${item.fat}g',
+        );
+      }
+    }
+
+    return buffer.toString();
   }
 
   String _formatDateKey(String dateKey) {
@@ -151,6 +723,28 @@ class _MealHistoryScreenState extends State<MealHistoryScreen> {
           ),
         ),
         actions: [
+          PopupMenuButton<_ExportFormat>(
+            enabled: !_isExporting,
+            tooltip: 'Export',
+            onSelected: _handleExport,
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: _ExportFormat.csv,
+                child: Text('Export CSV'),
+              ),
+              PopupMenuItem(
+                value: _ExportFormat.pdf,
+                child: Text('Export PDF'),
+              ),
+            ],
+            icon: _isExporting
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.file_download_outlined),
+          ),
           IconButton(
             onPressed: _refresh,
             icon: const Icon(Icons.refresh_rounded),
@@ -224,6 +818,13 @@ class _MealHistoryScreenState extends State<MealHistoryScreen> {
       ),
     );
   }
+}
+
+class _CsvExportResult {
+  final File file;
+  final String previewText;
+
+  const _CsvExportResult({required this.file, required this.previewText});
 }
 
 class _PeriodSummaryData {
@@ -790,36 +1391,33 @@ class _PeriodSelector extends StatelessWidget {
       ),
       child: Row(
         children: [
-          ..._PeriodOption.values
-              .where((p) => p != _PeriodOption.custom)
-              .map((period) {
-                final selected = period == selectedPeriod;
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () => onChanged(period),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? AppColors.deepBlue
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: Text(
-                        period.label,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: selected ? Colors.white : AppColors.blueGray,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                        ),
-                      ),
+          ..._PeriodOption.values.where((p) => p != _PeriodOption.custom).map((
+            period,
+          ) {
+            final selected = period == selectedPeriod;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => onChanged(period),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: selected ? AppColors.deepBlue : Colors.transparent,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Text(
+                    period.label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: selected ? Colors.white : AppColors.blueGray,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
                     ),
                   ),
-                );
-              })
-              ,
+                ),
+              ),
+            );
+          }),
           const SizedBox(width: 8),
           GestureDetector(
             onTap: onCalendarTap,
@@ -2125,6 +2723,283 @@ class _ErrorState extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ExportPreviewScreen extends StatelessWidget {
+  final _ExportFormat format;
+  final File file;
+  final _PeriodSummaryData summary;
+  final String previewText;
+
+  const _ExportPreviewScreen({
+    required this.format,
+    required this.file,
+    required this.summary,
+    required this.previewText,
+  });
+
+  String get _title {
+    switch (format) {
+      case _ExportFormat.csv:
+        return 'CSV Preview';
+      case _ExportFormat.pdf:
+        return 'PDF Preview';
+    }
+  }
+
+  String get _shareLabel {
+    switch (format) {
+      case _ExportFormat.csv:
+        return 'Share CSV';
+      case _ExportFormat.pdf:
+        return 'Share PDF';
+    }
+  }
+
+  IconData get _icon {
+    switch (format) {
+      case _ExportFormat.csv:
+        return Icons.table_chart_rounded;
+      case _ExportFormat.pdf:
+        return Icons.picture_as_pdf_rounded;
+    }
+  }
+
+  Future<void> _shareFile() async {
+    await Share.shareXFiles([
+      XFile(file.path),
+    ], text: 'Meal history export for ${summary.label}');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: AppColors.background,
+        surfaceTintColor: AppColors.background,
+        leading: IconButton(
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(Icons.arrow_back_rounded),
+          color: AppColors.deepBlue,
+        ),
+        title: Text(
+          _title,
+          style: const TextStyle(
+            color: AppColors.deepBlue,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+      body: format == _ExportFormat.pdf
+          ? PdfPreview(
+              build: (PdfPageFormat pageFormat) async {
+                return file.readAsBytes();
+              },
+              canChangeOrientation: false,
+              canChangePageFormat: false,
+              canDebug: false,
+              allowPrinting: true,
+              allowSharing: true,
+              pdfFileName: file.path.split('/').last,
+              loadingWidget: const Center(
+                child: CircularProgressIndicator(color: AppColors.deepBlue),
+              ),
+              onError: (context, error) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(22),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.error_outline_rounded,
+                          color: Colors.red,
+                          size: 38,
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Could not preview PDF',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: AppColors.deepBlue,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          error.toString(),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: AppColors.blueGray,
+                            fontSize: 13,
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        ElevatedButton.icon(
+                          onPressed: _shareFile,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.deepBlue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          icon: const Icon(Icons.ios_share_rounded),
+                          label: const Text(
+                            'Share PDF',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            )
+          : Column(
+              children: [
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: AppColors.white,
+                          borderRadius: BorderRadius.circular(26),
+                          border: Border.all(
+                            color: AppColors.royalBlue.withValues(alpha: 0.08),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 16,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 52,
+                              height: 52,
+                              decoration: BoxDecoration(
+                                color: AppColors.deepBlue.withValues(
+                                  alpha: 0.09,
+                                ),
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: Icon(
+                                _icon,
+                                color: AppColors.deepBlue,
+                                size: 28,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'CSV file is ready',
+                                    style: TextStyle(
+                                      color: AppColors.deepBlue,
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Period: ${summary.label}',
+                                    style: const TextStyle(
+                                      color: AppColors.blueGray,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: AppColors.white,
+                          borderRadius: BorderRadius.circular(26),
+                          border: Border.all(
+                            color: AppColors.royalBlue.withValues(alpha: 0.08),
+                          ),
+                        ),
+                        child: SelectableText(
+                          previewText,
+                          style: const TextStyle(
+                            color: AppColors.deepBlue,
+                            fontSize: 13,
+                            height: 1.55,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 14,
+                        offset: const Offset(0, -6),
+                      ),
+                    ],
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        onPressed: _shareFile,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.deepBlue,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                        ),
+                        icon: const Icon(Icons.ios_share_rounded),
+                        label: Text(
+                          _shareLabel,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }

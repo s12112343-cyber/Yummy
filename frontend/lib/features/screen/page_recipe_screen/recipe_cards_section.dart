@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '/../../models/recipe_details_model.dart';
 import '/../../core/services/recipe_service.dart';
+import '/../../core/services/favorite_service.dart';
 
 import 'recipe_details_page.dart';
 
@@ -99,6 +100,95 @@ class _RecipeCardsSectionState extends State<RecipeCardsSection> {
     return tokens.any((token) {
       return fields.any((field) => field.toLowerCase().contains(token));
     });
+  }
+
+  String _normalizeIngredientText(String value) {
+    return value.replaceAll(RegExp(r'[^a-zA-Z ]'), '').trim().toLowerCase();
+  }
+
+  List<String> _ingredientAliases(String ingredient) {
+    final cleanIngredient = _normalizeIngredientText(ingredient);
+
+    switch (cleanIngredient) {
+      case 'eggs':
+      case 'egg':
+        return ['egg', 'eggs'];
+      case 'nuts':
+      case 'nut':
+        return ['nut', 'nuts'];
+      case 'fish':
+      case 'seafood':
+      case 'shellfish':
+        return ['fish', 'seafood', 'shellfish'];
+      case 'chili':
+      case 'chilli':
+      case 'spicy food':
+      case 'spicy':
+        return ['chili', 'chilli', 'spicy', 'spicy food'];
+      case 'red meat':
+      case 'beef':
+      case 'meat':
+        return ['red meat', 'beef', 'meat'];
+      case 'milk':
+      case 'dairy':
+      case 'lactose':
+        return ['milk', 'dairy', 'lactose'];
+      case 'onion':
+      case 'onions':
+        return ['onion', 'onions'];
+      case 'garlic':
+        return ['garlic'];
+      case 'pork':
+        return ['pork'];
+      case 'gluten':
+      case 'flour':
+        return ['gluten', 'flour'];
+      case 'low fodmap':
+      case 'fodmap':
+        return ['fodmap', 'low fodmap'];
+      default:
+        return [cleanIngredient];
+    }
+  }
+
+  bool _ingredientMatches(String ingredients, String ingredient) {
+    final aliases = _ingredientAliases(ingredient);
+
+    return aliases.any(
+      (alias) => alias.isNotEmpty && ingredients.contains(alias),
+    );
+  }
+
+  int _countIngredientMatches(
+    String ingredients,
+    List<String> selectedIngredients,
+  ) {
+    if (selectedIngredients.isEmpty) return 0;
+
+    return selectedIngredients.where((ingredient) {
+      return _ingredientMatches(ingredients, ingredient);
+    }).length;
+  }
+
+  Map<String, dynamic> _recipeToFavoriteMap(RecipeDetailsModel recipe) {
+    return {
+      '_id': recipe.id,
+      'id': recipe.id,
+      'title': recipe.title,
+      'image': recipe.image,
+      'cuisine': recipe.cuisine,
+      'dietType': recipe.dietType,
+      'preparationTime': recipe.preparationTime,
+      'cookingTime': recipe.cookingTime,
+      'servings': recipe.servings,
+      'rating': recipe.rating,
+      'calories': recipe.calories,
+      'protein': recipe.protein,
+      'carbs': recipe.carbs,
+      'fat': recipe.fat,
+      'ingredients': recipe.ingredients,
+      'cookingSteps': recipe.cookingSteps,
+    };
   }
 
   @override
@@ -216,12 +306,7 @@ class _RecipeCardsSectionState extends State<RecipeCardsSection> {
           final matchesIncludeIngredients =
               widget.selectedIncludeIngredients.isEmpty ||
               widget.selectedIncludeIngredients.any((ingredient) {
-                final cleanIngredient = ingredient
-                    .replaceAll(RegExp(r'[^a-zA-Z ]'), '')
-                    .trim()
-                    .toLowerCase();
-
-                return ingredients.contains(cleanIngredient);
+                return _ingredientMatches(ingredients, ingredient);
               });
 
           // =====================
@@ -230,12 +315,7 @@ class _RecipeCardsSectionState extends State<RecipeCardsSection> {
 
           final matchesExcludeIngredients = !widget.selectedExcludeIngredients
               .any((ingredient) {
-                final cleanIngredient = ingredient
-                    .replaceAll(RegExp(r'[^a-zA-Z ]'), '')
-                    .trim()
-                    .toLowerCase();
-
-                return ingredients.contains(cleanIngredient);
+                return _ingredientMatches(ingredients, ingredient);
               });
 
           // =====================
@@ -452,6 +532,31 @@ class _RecipeCardsSectionState extends State<RecipeCardsSection> {
               matchesNutrition;
         }).toList();
 
+        if (widget.selectedIncludeIngredients.isNotEmpty) {
+          filteredRecipes.sort((a, b) {
+            final aIngredients = a.ingredients.join(' ').toLowerCase();
+            final bIngredients = b.ingredients.join(' ').toLowerCase();
+
+            final aIncludeScore = _countIngredientMatches(
+              aIngredients,
+              widget.selectedIncludeIngredients,
+            );
+            final bIncludeScore = _countIngredientMatches(
+              bIngredients,
+              widget.selectedIncludeIngredients,
+            );
+
+            if (aIncludeScore != bIncludeScore) {
+              return bIncludeScore.compareTo(aIncludeScore);
+            }
+
+            final aRating = a.rating;
+            final bRating = b.rating;
+
+            return bRating.compareTo(aRating);
+          });
+        }
+
         // =========================
         // LIST
         // =========================
@@ -489,6 +594,9 @@ class _RecipeCardsSectionState extends State<RecipeCardsSection> {
                   separatorBuilder: (_, __) => const SizedBox(height: 20),
                   itemBuilder: (context, index) {
                     final recipe = filteredRecipes[index];
+                    final isFavorite = FavoriteService.isFavoriteRecipe(
+                      recipe.id,
+                    );
 
                     return GestureDetector(
                       onTap: () {
@@ -594,6 +702,52 @@ class _RecipeCardsSectionState extends State<RecipeCardsSection> {
                                       ],
                                     ),
                                   ],
+                                ),
+                              ),
+                              Positioned(
+                                top: 16,
+                                right: 16,
+                                child: ValueListenableBuilder<Set<String>>(
+                                  valueListenable:
+                                      FavoriteService.favoriteRecipesNotifier,
+                                  builder: (context, favoritesSet, _) {
+                                    final localIsFav = favoritesSet.contains(
+                                      recipe.id,
+                                    );
+
+                                    return Material(
+                                      color: Colors.white.withOpacity(0.95),
+                                      shape: const CircleBorder(),
+                                      child: InkWell(
+                                        customBorder: const CircleBorder(),
+                                        onTap: () async {
+                                          // optimistic toggle: UI updates immediately via notifier
+                                          await FavoriteService.toggleRecipe(
+                                            _recipeToFavoriteMap(recipe),
+                                          );
+                                        },
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(10),
+                                          child: AnimatedSwitcher(
+                                            duration: const Duration(
+                                              milliseconds: 180,
+                                            ),
+                                            child: Icon(
+                                              localIsFav
+                                                  ? Icons.favorite_rounded
+                                                  : Icons
+                                                        .favorite_border_rounded,
+                                              key: ValueKey(localIsFav),
+                                              color: localIsFav
+                                                  ? const Color(0xffE53935)
+                                                  : const Color(0xff1B3C73),
+                                              size: 22,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ),
                             ],

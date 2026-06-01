@@ -54,12 +54,7 @@ class _LoginScreenState extends State<LoginScreen>
         TweenSequenceItem(tween: Tween(begin: 8, end: -4), weight: 1),
         TweenSequenceItem(tween: Tween(begin: -4, end: 0), weight: 1),
       ],
-    ).animate(
-      CurvedAnimation(
-        parent: _shakeController,
-        curve: Curves.easeOut,
-      ),
-    );
+    ).animate(CurvedAnimation(parent: _shakeController, curve: Curves.easeOut));
 
     _loadRememberMePreference();
   }
@@ -242,11 +237,7 @@ class _LoginScreenState extends State<LoginScreen>
               children: [
                 SizedBox(height: h * 0.03),
 
-                const Row(
-                  children: [
-                    AppBackButton(),
-                  ],
-                ),
+                const Row(children: [AppBackButton()]),
 
                 const SizedBox(height: 20),
 
@@ -286,9 +277,7 @@ class _LoginScreenState extends State<LoginScreen>
                     decoration: BoxDecoration(
                       color: const Color(0xFFFFE8E8),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: const Color(0xFFFFB3B3),
-                      ),
+                      border: Border.all(color: const Color(0xFFFFB3B3)),
                     ),
                     child: Row(
                       children: [
@@ -419,8 +408,7 @@ class _LoginScreenState extends State<LoginScreen>
                                     height: 22,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2.4,
-                                      valueColor:
-                                          AlwaysStoppedAnimation<Color>(
+                                      valueColor: AlwaysStoppedAnimation<Color>(
                                         Colors.white,
                                       ),
                                     ),

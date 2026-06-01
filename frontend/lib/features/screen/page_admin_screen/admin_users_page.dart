@@ -64,8 +64,20 @@ class _AdminUsersPageState extends State<AdminUsersPage>
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
+        final rawUsers = (data['users'] as List?) ?? [];
+        final normalizedUsers = rawUsers.map((u) {
+          if (u is Map<String, dynamic>) {
+            return {...u, 'isBanned': u['isBanned'] == true};
+          }
+          if (u is Map) {
+            final casted = Map<String, dynamic>.from(u);
+            return {...casted, 'isBanned': casted['isBanned'] == true};
+          }
+          return u;
+        }).toList();
+
         setState(() {
-          _users = data['users'] ?? [];
+          _users = normalizedUsers;
           _loading = false;
         });
         _listController.forward(from: 0);
@@ -632,18 +644,19 @@ class _AdminUsersPageState extends State<AdminUsersPage>
       }
 
       final data = jsonDecode(res.body);
-
-      /// 🔥 الحل الحقيقي
-      final updatedUser = data['user'] ?? data;
+      final updatedUser = data['user'];
+      final updatedBanState =
+          data['isBanned'] == true ||
+          (updatedUser is Map && updatedUser['isBanned'] == true);
 
       setState(() {
         final i = _users.indexWhere((u) => u['_id'] == id);
         if (i != -1) {
-          _users[i]['isBanned'] = updatedUser['isBanned'];
+          _users[i]['isBanned'] = updatedBanState;
         }
       });
 
-      _showToast(updatedUser['isBanned'] ? 'User banned' : 'User unbanned');
+      _showToast(updatedBanState ? 'User banned' : 'User unbanned');
     } catch (e) {
       print("BAN ERROR 👉 $e");
       _showToast('Error updating user status', isError: true);

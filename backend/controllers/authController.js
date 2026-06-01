@@ -171,6 +171,13 @@ const login = async (req, res) => {
       });
     }
 
+    if (user.isBanned) {
+      return res.status(403).json({
+        message: "Your account has been banned. Please contact support.",
+        isBanned: true,
+      });
+    }
+
     const token = jwt.sign(
       {
         userId: user._id,
@@ -189,6 +196,7 @@ const login = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        isBanned: !!user.isBanned,
       },
     });
   } catch (error) {
@@ -523,6 +531,7 @@ const getMe = async (req, res) => {
           name: user.name,
           email: user.email,
           role: user.role,
+          isBanned: !!user.isBanned,
           followerCount,
           followingCount,
           profile: profile

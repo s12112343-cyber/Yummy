@@ -187,15 +187,11 @@ class _PostScreenState extends State<PostScreen> with WidgetsBindingObserver {
         break;
       case _PostFeedFilter.highestProtein:
         final list = List<_FeedPost>.from(_posts);
-        list.sort((a, b) => (b.protein ?? 0).compareTo(a.protein ?? 0));
+        list.retainWhere((p) => (p.protein ?? 0) >= 15);
         return _applyPostSortOrder(list);
       case _PostFeedFilter.lowestCalories:
         final list = List<_FeedPost>.from(_posts);
-        list.sort(
-          (a, b) => (a.calories ?? double.infinity).compareTo(
-            b.calories ?? double.infinity,
-          ),
-        );
+        list.retainWhere((p) => (p.calories ?? double.infinity) <= 600);
         return _applyPostSortOrder(list);
       case _PostFeedFilter.todayPosts:
         final now = DateTime.now();
@@ -1207,11 +1203,11 @@ class _PostScreenState extends State<PostScreen> with WidgetsBindingObserver {
                       break;
                     case _PostFeedFilter.highestProtein:
                       title = 'Highest protein';
-                      subtitle = 'Sort by protein (high → low)';
+                      subtitle = 'Filter: protein >= 15g';
                       break;
                     case _PostFeedFilter.lowestCalories:
                       title = 'Lowest calories';
-                      subtitle = 'Sort by calories (low → high)';
+                      subtitle = 'Filter: calories <= 600';
                       break;
                     case _PostFeedFilter.todayPosts:
                       title = 'Today posts';
@@ -1244,12 +1240,12 @@ class _PostScreenState extends State<PostScreen> with WidgetsBindingObserver {
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     subtitle: Text(
-                            subtitle,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.blueGray,
-                            ),
-                          ),
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.blueGray,
+                      ),
+                    ),
                     onTap: () {
                       Navigator.pop(ctx);
                       setState(() => _feedFilter = f);
@@ -2492,9 +2488,9 @@ class _PostScreenState extends State<PostScreen> with WidgetsBindingObserver {
       case _PostFeedFilter.myPosts:
         return 'Posts created by you';
       case _PostFeedFilter.highestProtein:
-        return 'Sort: protein high to low';
+        return 'Filter: protein >= 15g';
       case _PostFeedFilter.lowestCalories:
-        return 'Sort: calories low to high';
+        return 'Filter: calories <= 600';
       case _PostFeedFilter.todayPosts:
         return 'Published today only';
       case _PostFeedFilter.mostLiked:

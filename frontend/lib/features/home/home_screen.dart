@@ -11,6 +11,7 @@ import '../about/about_us_page.dart';
 import '../profile/user_profile_screen.dart';
 import '../auth/welcome_screen.dart';
 import '../add_meal/add_meal_screen.dart';
+import 'gemini_chat_screen.dart';
 import 'widgets/fire_streak_dialog_card.dart';
 import 'widgets/streak_gain_popup_card.dart';
 import 'widgets/streak_lost_popup_card.dart';
@@ -434,7 +435,10 @@ class _HomeScreenState extends State<HomeScreen>
 
     if (!DateUtils.isSameDay(_lastLossPopupDate, missedDay)) {
       _lastLossPopupDate = missedDay;
-      _showStreakLostPopup();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _showStreakLostPopup();
+      });
     }
   }
 
@@ -531,7 +535,8 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  bool get _isCurrentHomeRoute => ModalRoute.of(context)?.isCurrent ?? true;
+  bool get _isCurrentHomeRoute =>
+      mounted ? (ModalRoute.of(context)?.isCurrent ?? true) : false;
 
   void _queueGainPopup(int streakCount) {
     _hasPendingGainPopup = true;
@@ -552,7 +557,10 @@ class _HomeScreenState extends State<HomeScreen>
     _hasPendingGainPopup = false;
     _pendingGainPopupCount = null;
     _lastGainPopupDate = today;
-    _showStreakGainPopup(streakCount);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _showStreakGainPopup(streakCount);
+    });
   }
 
   Future<void> _showStreakLostPopup() async {
@@ -690,7 +698,10 @@ class _HomeScreenState extends State<HomeScreen>
     if (shouldShowGainPopup) {
       if (_isCurrentHomeRoute) {
         _lastGainPopupDate = today;
-        _showStreakGainPopup(newCounter);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _showStreakGainPopup(newCounter);
+        });
       } else {
         _queueGainPopup(newCounter);
       }
@@ -828,18 +839,18 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                     if (!hasMeal) const SizedBox(height: 8),
                     if (isPartial)
-  Text(
-    mealDisplayText,
-    maxLines: 3,
-    overflow: TextOverflow.visible,
-    softWrap: true,
-    style: TextStyle(
-      fontSize: 11.5,
-      fontWeight: FontWeight.w600,
-      color: Colors.white.withOpacity(0.95),
-      height: 1.16,
-    ),
-  ),
+                      Text(
+                        mealDisplayText,
+                        maxLines: 3,
+                        overflow: TextOverflow.visible,
+                        softWrap: true,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white.withOpacity(0.95),
+                          height: 1.16,
+                        ),
+                      ),
                     if (isPartial) const SizedBox(height: 4),
                     if (isPartial)
                       Column(
@@ -864,19 +875,19 @@ class _HomeScreenState extends State<HomeScreen>
                           ),
                         ],
                       ),
-                   if (isCompleted)
-  Text(
-    mealDisplayText,
-    maxLines: 3,
-    overflow: TextOverflow.visible,
-    softWrap: true,
-    style: TextStyle(
-      fontSize: 11.5,
-      fontWeight: FontWeight.w600,
-      color: Colors.white.withOpacity(0.95),
-      height: 1.16,
-    ),
-  ),
+                    if (isCompleted)
+                      Text(
+                        mealDisplayText,
+                        maxLines: 3,
+                        overflow: TextOverflow.visible,
+                        softWrap: true,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white.withOpacity(0.95),
+                          height: 1.16,
+                        ),
+                      ),
                     const Spacer(),
                     if (isCompleted)
                       Center(
@@ -1324,20 +1335,18 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   String _mealDisplayText(String? mealName, {int maxItems = 3}) {
-  final allLines = (mealName ?? '')
-      .split('\n')
-      .map((line) => line.trim())
-      .where((line) => line.isNotEmpty)
-      .toList();
+    final allLines = (mealName ?? '')
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
 
-  if (allLines.isEmpty) return '';
+    if (allLines.isEmpty) return '';
 
-  final count = allLines.length >= maxItems ? maxItems : allLines.length;
+    final count = allLines.length >= maxItems ? maxItems : allLines.length;
 
-  return allLines
-      .skip(allLines.length - count)
-      .join('\n');
-}
+    return allLines.skip(allLines.length - count).join('\n');
+  }
 
   Future<void> _goToAddMealScreen(MealCardData meal) async {
     await Navigator.of(context).push(
@@ -2178,7 +2187,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildChatPlaceholderButton() {
     return Tooltip(
-      message: 'Chat (Coming Soon)',
+      message: 'Chat with AI',
       child: Material(
         color: AppColors.deepBlue,
         elevation: 7,
@@ -2191,7 +2200,12 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
         child: InkWell(
-          onTap: () {},
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const GeminiChatScreen()),
+            );
+          },
           borderRadius: BorderRadius.circular(18),
           child: const SizedBox(
             width: 56,

@@ -21,6 +21,7 @@ class AuthProvider extends ChangeNotifier {
   String? _token;
   String? _userId;
   bool _rememberMe = true;
+  String? _sessionMessage;
 
   AuthStatus get status => _status;
   bool get isLoading => _isLoading;
@@ -28,6 +29,7 @@ class AuthProvider extends ChangeNotifier {
   String? get token => _token;
   String? get userId => _userId;
   bool get rememberMe => _rememberMe;
+  String? get sessionMessage => _sessionMessage;
 
   Future<void> initialize() async {
     _rememberMe = await _authService.getRememberMePreference();
@@ -36,12 +38,22 @@ class AuthProvider extends ChangeNotifier {
 
     final hasSession = _rememberMe && _token != null && _token!.isNotEmpty;
 
-    _status = hasSession
-        ? AuthStatus.authenticated
-        : AuthStatus.unauthenticated;
+    if (hasSession) {
+      final validation = await _authService.fetchCurrentUser();
 
-    if (_status == AuthStatus.authenticated) {
-      await _authService.registerDeviceToken();
+      if (validation['success'] == true) {
+        _status = AuthStatus.authenticated;
+        _sessionMessage = null;
+        await _authService.registerDeviceToken();
+      } else {
+        _status = AuthStatus.unauthenticated;
+        _sessionMessage = validation['message']?.toString();
+        _token = null;
+        _userId = null;
+      }
+    } else {
+      _status = AuthStatus.unauthenticated;
+      _sessionMessage = null;
     }
 
     notifyListeners();
@@ -105,6 +117,7 @@ class AuthProvider extends ChangeNotifier {
 
         _rememberMe = rememberMe;
         await prefs.setBool('rememberMe', rememberMe);
+        _sessionMessage = null;
 
         _status = (_token != null && _token!.isNotEmpty)
             ? AuthStatus.authenticated
@@ -121,6 +134,7 @@ class AuthProvider extends ChangeNotifier {
       }
 
       _status = AuthStatus.unauthenticated;
+      _sessionMessage = data['message']?.toString();
       notifyListeners();
 
       return {'success': false, 'message': data['message'] ?? 'Login failed'};
@@ -128,6 +142,7 @@ class AuthProvider extends ChangeNotifier {
       debugPrint("LOGIN ERROR => $e");
 
       _status = AuthStatus.unauthenticated;
+      _sessionMessage = e.toString();
       notifyListeners();
 
       return {'success': false, 'message': e.toString()};
@@ -183,6 +198,7 @@ class AuthProvider extends ChangeNotifier {
     _userId = null;
     _rememberMe = false;
     _status = AuthStatus.unauthenticated;
+    _sessionMessage = null;
 
     notifyListeners();
   }

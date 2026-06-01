@@ -6,6 +6,8 @@ import '../../../core/theme/app_colors.dart';
 
 import 'recipe_videos_section.dart';
 import 'recipe_cards_section.dart';
+import 'favorites_page.dart';
+import '../../../core/services/favorite_service.dart';
 import 'recipe_filter_screen.dart';
 
 enum _RecipeSortOrder { newestFirst, oldestFirst, mostPopular }
@@ -29,6 +31,8 @@ class RecipesPage extends StatefulWidget {
 
 class _RecipesPageState extends State<RecipesPage>
     with SingleTickerProviderStateMixin {
+  static Map<String, dynamic> _sessionFilterCache = {};
+
   late TabController _tabController;
 
   final TextEditingController searchController = TextEditingController();
@@ -65,11 +69,58 @@ class _RecipesPageState extends State<RecipesPage>
         selectedFoodExceptions.isNotEmpty;
   }
 
+  void _restoreCachedFilters() {
+    if (_sessionFilterCache.isEmpty) return;
+
+    selectedNutritionFilter =
+        (_sessionFilterCache['selectedNutritionFilter'] ?? '').toString();
+    selectedCuisine = (_sessionFilterCache['selectedCuisine'] ?? 'All')
+        .toString();
+    selectedDietTypes = List<String>.from(
+      _sessionFilterCache['selectedDietTypes'] ?? const <String>[],
+    );
+    selectedIncludeIngredients = List<String>.from(
+      _sessionFilterCache['selectedIncludeIngredients'] ?? const <String>[],
+    );
+    selectedExcludeIngredients = List<String>.from(
+      _sessionFilterCache['selectedExcludeIngredients'] ?? const <String>[],
+    );
+    selectedCookingTime = (_sessionFilterCache['selectedCookingTime'] ?? '')
+        .toString();
+    selectedMealTime = (_sessionFilterCache['selectedMealTime'] ?? '')
+        .toString();
+    selectedMedicalDiets = List<String>.from(
+      _sessionFilterCache['selectedMedicalDiets'] ?? const <String>[],
+    );
+    selectedFoodExceptions = List<String>.from(
+      _sessionFilterCache['selectedFoodExceptions'] ?? const <String>[],
+    );
+  }
+
+  void _cacheCurrentFilters() {
+    _sessionFilterCache = {
+      'selectedNutritionFilter': selectedNutritionFilter,
+      'selectedCuisine': selectedCuisine,
+      'selectedDietTypes': List<String>.from(selectedDietTypes),
+      'selectedIncludeIngredients': List<String>.from(
+        selectedIncludeIngredients,
+      ),
+      'selectedExcludeIngredients': List<String>.from(
+        selectedExcludeIngredients,
+      ),
+      'selectedCookingTime': selectedCookingTime,
+      'selectedMealTime': selectedMealTime,
+      'selectedMedicalDiets': List<String>.from(selectedMedicalDiets),
+      'selectedFoodExceptions': List<String>.from(selectedFoodExceptions),
+    };
+  }
+
   @override
   void initState() {
     super.initState();
+    _restoreCachedFilters();
 
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 2, vsync: this, initialIndex: 1);
 
     _searchFocusNode.addListener(() {
       if (!mounted) return;
@@ -82,6 +133,7 @@ class _RecipesPageState extends State<RecipesPage>
 
   @override
   void dispose() {
+    _cacheCurrentFilters();
     _searchFocusNode.dispose();
     _searchDebounce?.cancel();
     super.dispose();
@@ -205,7 +257,7 @@ class _RecipesPageState extends State<RecipesPage>
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          const buttonWidth = 44.0;
+          const buttonWidth = 44.0 * 2 + 8.0;
           const gap = 10.0;
 
           final maxSearchWidth = (constraints.maxWidth - buttonWidth - gap)
@@ -306,10 +358,54 @@ class _RecipesPageState extends State<RecipesPage>
                 ),
               ),
               const SizedBox(width: 10),
-              _buildFilterButton(),
+              _buildHeaderActionButtons(),
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildHeaderActionButtons() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildFavoritesButton(),
+        const SizedBox(width: 8),
+        _buildFilterButton(),
+      ],
+    );
+  }
+
+  Widget _buildFavoritesButton() {
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const FavoritesPage()),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.white.withOpacity(0.8),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: const Icon(
+          Icons.favorite_rounded,
+          color: Color(0xff1B3C73),
+          size: 20,
+        ),
       ),
     );
   }
@@ -323,8 +419,20 @@ class _RecipesPageState extends State<RecipesPage>
           onTap: () async {
             final result = await Navigator.push(
               context,
-
-              MaterialPageRoute(builder: (_) => const RecipeFilterScreen()),
+              MaterialPageRoute(
+                builder: (_) => RecipeFilterScreen(
+                  initialMealTime: selectedMealTime,
+                  initialCuisine: selectedCuisine == 'All'
+                      ? ''
+                      : selectedCuisine,
+                  initialCookingTime: selectedCookingTime,
+                  initialNutritionFilter: selectedNutritionFilter,
+                  initialIncludeIngredients: selectedIncludeIngredients,
+                  initialExcludeIngredients: selectedExcludeIngredients,
+                  initialDietTypes: selectedDietTypes,
+                  initialMedicalDiets: selectedMedicalDiets,
+                ),
+              ),
             );
 
             if (result != null) {
@@ -352,6 +460,7 @@ class _RecipesPageState extends State<RecipesPage>
                 );
                 selectedNutritionFilter = result["nutritionFilter"] ?? "";
               });
+              _cacheCurrentFilters();
             }
           },
           borderRadius: BorderRadius.circular(12),

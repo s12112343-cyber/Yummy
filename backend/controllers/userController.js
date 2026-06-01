@@ -177,7 +177,10 @@ const toggleBanUser = async (req, res) => {
 
     res.json({
       success: true,
-      user, // 🔥 مهم جدًا
+      user: {
+        ...user.toObject(),
+        isBanned: !!user.isBanned,
+      },
       isBanned: user.isBanned,
       message: user.isBanned ? 'User banned' : 'User unbanned'
     });

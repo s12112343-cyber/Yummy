@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:frontend/core/config/app_config.dart';
 
 class RecipeFilterScreen extends StatefulWidget {
   final String initialMealTime;
@@ -571,8 +574,10 @@ class _RecipeFilterScreenState extends State<RecipeFilterScreen> {
     required List<String> selected,
     required Function(String) onTap,
   }) {
+    final mergedItems = {...selected, ...items}.toList();
+
     final visibleItems = _prioritizeSelectedItems(
-      items,
+      mergedItems,
       (item) => selected.contains(item),
     );
 
@@ -580,12 +585,12 @@ class _RecipeFilterScreenState extends State<RecipeFilterScreen> {
       title: title,
       subtitle: subtitle,
       selectedCount: selected.length,
-      headerAction: items.length > 6
+      headerAction: mergedItems.length > 6
           ? TextButton.icon(
               onPressed: () {
                 _openItemsBottomSheet(
                   title: title,
-                  items: items,
+                  items: mergedItems,
                   selectedValues: selected,
                   onMultiToggle: onTap,
                 );
@@ -739,11 +744,80 @@ class _RecipeFilterScreenState extends State<RecipeFilterScreen> {
   }) {
     final isMultiSelect = selectedValues != null;
     final bool isCuisineSection = title == 'Cuisines';
+    final bool enableIngredientApiSearch =
+        isMultiSelect &&
+        (title == 'Include Ingredients' || title == 'Avoid Ingredients');
 
     String? tempSelectedValue = selectedValue;
+    String searchQuery = '';
+    bool isSearchingIngredients = false;
+    List<String> apiIngredientResults = [];
+    int latestSearchRequestId = 0;
 
     final originalSelectedValues = <String>{...selectedValues ?? const []};
     final tempSelectedValues = <String>{...originalSelectedValues};
+
+    Future<void> searchIngredientsFromApi(
+      String query,
+      void Function(void Function()) setSheetState,
+    ) async {
+      if (!enableIngredientApiSearch) {
+        return;
+      }
+
+      final normalizedQuery = query.trim();
+      final requestId = ++latestSearchRequestId;
+
+      if (normalizedQuery.isEmpty) {
+        setSheetState(() {
+          isSearchingIngredients = false;
+          apiIngredientResults = [];
+        });
+        return;
+      }
+
+      setSheetState(() {
+        isSearchingIngredients = true;
+      });
+
+      try {
+        final response = await http.get(
+          Uri.parse(
+            '${AppConfig.baseUrl}/ingredients/search?q=${Uri.encodeQueryComponent(normalizedQuery)}',
+          ),
+        );
+
+        if (!mounted || requestId != latestSearchRequestId) return;
+
+        if (response.statusCode != 200) {
+          setSheetState(() {
+            isSearchingIngredients = false;
+            apiIngredientResults = [];
+          });
+          return;
+        }
+
+        final decoded = jsonDecode(response.body);
+        final data = decoded is List ? decoded : const [];
+
+        final fetchedNames = data
+            .map((e) => (e['name'] ?? '').toString().trim())
+            .where((name) => name.isNotEmpty)
+            .toList();
+
+        setSheetState(() {
+          isSearchingIngredients = false;
+          apiIngredientResults = fetchedNames;
+        });
+      } catch (_) {
+        if (!mounted || requestId != latestSearchRequestId) return;
+
+        setSheetState(() {
+          isSearchingIngredients = false;
+          apiIngredientResults = [];
+        });
+      }
+    }
 
     showModalBottomSheet<void>(
       context: context,
@@ -752,19 +826,49 @@ class _RecipeFilterScreenState extends State<RecipeFilterScreen> {
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            final selectedFirstItems = items.where((item) {
+            final normalizedSearchQuery = searchQuery.trim().toLowerCase();
+
+            final baseSource = {
+              ...tempSelectedValues,
+              ...items,
+              ...apiIngredientResults,
+            }.toList();
+
+            final typedIngredient = searchQuery.trim();
+            final hasTypedIngredient = baseSource.any(
+              (item) => item.toLowerCase() == typedIngredient.toLowerCase(),
+            );
+
+            if (enableIngredientApiSearch &&
+                typedIngredient.isNotEmpty &&
+                !hasTypedIngredient) {
+              baseSource.insert(0, typedIngredient);
+            }
+
+            final filteredSource = normalizedSearchQuery.isEmpty
+                ? baseSource
+                : baseSource.where((item) {
+                    return item.toLowerCase().contains(normalizedSearchQuery);
+                  }).toList();
+
+            final selectedFirstItems = filteredSource.where((item) {
               return isMultiSelect
                   ? tempSelectedValues.contains(item)
                   : tempSelectedValue == item;
             }).toList();
 
-            final unselectedItems = items.where((item) {
+            final unselectedItems = filteredSource.where((item) {
               return isMultiSelect
                   ? !tempSelectedValues.contains(item)
                   : tempSelectedValue != item;
             }).toList();
 
             final orderedItems = [...selectedFirstItems, ...unselectedItems];
+            final searchHintText = !enableIngredientApiSearch
+                ? 'Search'
+                : title == 'Include Ingredients'
+                ? 'Search what is in your pantry'
+                : 'Search ingredients or allergens to avoid';
 
             return Container(
               decoration: const BoxDecoration(
@@ -813,44 +917,110 @@ class _RecipeFilterScreenState extends State<RecipeFilterScreen> {
                           ],
                         ),
                         const SizedBox(height: 10),
-                        Expanded(
-                          child: GridView.builder(
-                            itemCount: orderedItems.length,
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 3,
-                                  crossAxisSpacing: 6,
-                                  mainAxisSpacing: 6,
-                                  mainAxisExtent: 58,
-                                ),
-                            itemBuilder: (context, index) {
-                              final item = orderedItems[index];
+                        TextField(
+                          onChanged: (value) {
+                            setSheetState(() {
+                              searchQuery = value;
+                            });
 
-                              final isSelected = isMultiSelect
-                                  ? tempSelectedValues.contains(item)
-                                  : tempSelectedValue == item;
-
-                              return _buildChip(
-                                text: item,
-                                isSelected: isSelected,
-                                leading: _buildAssetIcon(title, item),
-                                iconOnTop: isCuisineSection,
-                                onTap: () {
-                                  setSheetState(() {
-                                    if (isMultiSelect) {
-                                      if (tempSelectedValues.contains(item)) {
-                                        tempSelectedValues.remove(item);
-                                      } else {
-                                        tempSelectedValues.add(item);
-                                      }
-                                    } else {
-                                      tempSelectedValue = item;
-                                    }
-                                  });
-                                },
-                              );
-                            },
+                            if (enableIngredientApiSearch) {
+                              searchIngredientsFromApi(value, setSheetState);
+                            }
+                          },
+                          decoration: InputDecoration(
+                            hintText: searchHintText,
+                            prefixIcon: const Icon(
+                              Icons.search_rounded,
+                              color: navy,
+                            ),
+                            suffixIcon: isSearchingIngredients
+                                ? const Padding(
+                                    padding: EdgeInsets.all(12),
+                                    child: SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                            filled: true,
+                            fillColor: const Color(0xffF7FAFE),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(color: borderBlue),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(color: borderBlue),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(
+                                color: Color(0xff6F95CF),
+                              ),
+                            ),
                           ),
+                        ),
+                        const SizedBox(height: 10),
+                        Expanded(
+                          child: orderedItems.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    searchQuery.trim().isEmpty
+                                        ? 'No items available'
+                                        : 'No matching ingredients',
+                                    style: const TextStyle(
+                                      color: navy,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                )
+                              : GridView.builder(
+                                  itemCount: orderedItems.length,
+                                  gridDelegate:
+                                      const SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: 3,
+                                        crossAxisSpacing: 6,
+                                        mainAxisSpacing: 6,
+                                        mainAxisExtent: 58,
+                                      ),
+                                  itemBuilder: (context, index) {
+                                    final item = orderedItems[index];
+
+                                    final isSelected = isMultiSelect
+                                        ? tempSelectedValues.contains(item)
+                                        : tempSelectedValue == item;
+
+                                    return _buildChip(
+                                      text: item,
+                                      isSelected: isSelected,
+                                      leading: _buildAssetIcon(title, item),
+                                      iconOnTop: isCuisineSection,
+                                      onTap: () {
+                                        setSheetState(() {
+                                          if (isMultiSelect) {
+                                            if (tempSelectedValues.contains(
+                                              item,
+                                            )) {
+                                              tempSelectedValues.remove(item);
+                                            } else {
+                                              tempSelectedValues.add(item);
+                                            }
+                                          } else {
+                                            tempSelectedValue = item;
+                                          }
+                                        });
+                                      },
+                                    );
+                                  },
+                                ),
                         ),
                         const SizedBox(height: 14),
                         SizedBox(
@@ -1140,7 +1310,6 @@ class _RecipeFilterScreenState extends State<RecipeFilterScreen> {
       if (value.contains('high fat')) return 'assets/icons/high_fat.png';
     }
 
-    return 'assets/icons/filter_default.png';
+    return null;
   }
 }
-

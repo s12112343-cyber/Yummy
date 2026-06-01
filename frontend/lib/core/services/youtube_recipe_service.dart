@@ -25,6 +25,11 @@ class YoutubeRecipeService {
   Future<List<YoutubeVideoModel>> fetchRecipeVideos({
     String searchText = "",
   }) async {
+    final keys = AppConfig.youtubeApiKeys;
+    if (keys.isEmpty) {
+      print("YOUTUBE ERROR => Missing YOUTUBE_API_KEYS in .env");
+      return [];
+    }
     // =========================
     // RANDOM QUERY
     // =========================
@@ -57,7 +62,7 @@ class YoutubeRecipeService {
       "&type=video"
       "&maxResults=5"
       "&q=${Uri.encodeComponent(query)}"
-      "&key=${AppConfig.youtubeApiKeys[_currentKeyIndex]}",
+      "&key=${keys[_currentKeyIndex]}",
     );
 
     final searchResponse = await http.get(searchUrl);
@@ -69,12 +74,12 @@ class YoutubeRecipeService {
       print("KEY $_currentKeyIndex EXPIRED 😭🔥");
 
       _currentKeyIndex++;
-      if (_currentKeyIndex >= AppConfig.youtubeApiKeys.length) {
+      if (_currentKeyIndex >= keys.length) {
         _currentKeyIndex = 0;
       }
       // إذا في key ثانية
 
-      if (_currentKeyIndex < AppConfig.youtubeApiKeys.length) {
+      if (_currentKeyIndex < keys.length) {
         print("SWITCHING TO NEXT KEY 😭🔥");
 
         return fetchRecipeVideos(searchText: searchText);
@@ -121,7 +126,7 @@ class YoutubeRecipeService {
       "$_baseUrl/videos"
       "?part=contentDetails"
       "&id=$videoIds"
-      "&key=${AppConfig.youtubeApiKeys[_currentKeyIndex]}",
+      "&key=${keys[_currentKeyIndex]}",
     );
 
     final detailsResponse = await http.get(detailsUrl);

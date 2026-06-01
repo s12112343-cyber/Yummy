@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 
 import 'core/providers/auth_provider.dart';
@@ -10,6 +11,7 @@ import 'core/providers/user_provider.dart';
 import 'core/providers/like_provider.dart';
 import 'core/providers/follow_provider.dart';
 import 'core/services/cart_service.dart';
+import 'core/services/favorite_service.dart';
 
 import 'core/services/firebase_notification_handler.dart';
 import 'core/navigation/app_navigator.dart';
@@ -18,6 +20,12 @@ import 'features/auth/splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (_) {
+    // If `.env` isn't present (e.g. CI or a fresh clone), Gemini keys will be missing.
+  }
 
   // Lock app orientation
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
@@ -43,6 +51,7 @@ Future<void> main() async {
   }
 
   await CartService.init();
+  await FavoriteService.loadFavorites();
 
   runApp(
     MultiProvider(

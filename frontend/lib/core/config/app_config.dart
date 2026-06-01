@@ -1,5 +1,7 @@
 const String _defaultBaseUrl = 'http://192.168.1.50:5000/api';
 
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 class AppConfig {
   // ==============================
   // Backend Base URL
@@ -12,15 +14,18 @@ class AppConfig {
   // ==============================
   // YouTube API Key
   // ==============================
-  static const List<String> youtubeApiKeys = [
-    'AIzaSyAoJe2O-UWp2Ya-tbZlx0psed7XwRyEluA',
-    'AIzaSyAJIq4xal4uDJ1l70H_WhVSiTVzKAu98wo',
-    'AIzaSyC19wwCEOCoQgIkPOpooDtDvPsFjQAIm04',
-    'AIzaSyADEmWelIw6QpkOV7s6nbaPhWw8jfxqs8Q',
-    'AIzaSyC6HIFCCPQiAJltbOVznWNyLTob9DXWxrg',
-  ];
+  static List<String> youtubeApiKeys = _youtubeKeysFromEnv();
 
-  static final String youtubeApiKey = youtubeApiKeys.first;
+  static List<String> _youtubeKeysFromEnv() {
+    final raw = (dotenv.env['YOUTUBE_API_KEYS'] ?? '').trim();
+    if (raw.isEmpty) return const [];
+
+    return raw
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList(growable: false);
+  }
 
   // ==============================
   // Helpers
