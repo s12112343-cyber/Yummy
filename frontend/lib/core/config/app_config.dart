@@ -1,6 +1,6 @@
-const String _defaultBaseUrl = 'http://192.168.1.50:5000/api';
-
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+const String _defaultBaseUrl = 'http://192.168.1.50:5000/api';
 
 class AppConfig {
   // ==============================
