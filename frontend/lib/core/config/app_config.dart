@@ -17,7 +17,14 @@ class AppConfig {
   static List<String> youtubeApiKeys = _youtubeKeysFromEnv();
 
   static List<String> _youtubeKeysFromEnv() {
-    final raw = (dotenv.env['YOUTUBE_API_KEYS'] ?? '').trim();
+    String raw = '';
+    try {
+      if (dotenv.isInitialized) {
+        raw = (dotenv.env['YOUTUBE_API_KEYS'] ?? '').trim();
+      }
+    } catch (_) {
+      raw = '';
+    }
     if (raw.isEmpty) return const [];
 
     return raw

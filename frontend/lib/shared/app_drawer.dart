@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/config/app_config.dart';
 import '../core/theme/app_colors.dart';
 import '../features/meal_history/meal_history_screen.dart';
+import '../features/plan/my_plan_screen.dart';
 import '../features/profile/personal_details_screen.dart';
 import '../features/profile/user_profile_screen.dart';
 import '../features/screen/page_cook_screen/my_orders_screen.dart';
@@ -331,6 +332,21 @@ class AppDrawer extends StatelessWidget {
                         MaterialPageRoute(
                           builder: (_) => const MealHistoryScreen(),
                         ),
+                      );
+                    },
+                  ),
+
+                  _menuTile(
+                    context,
+                    icon: Icons.assignment_outlined,
+                    title: "My Plan",
+                    subtitle: "Calories, BMI, and meal distribution (PDF)",
+                    onTap: () {
+                      Navigator.pop(context);
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const MyPlanScreen()),
                       );
                     },
                   ),

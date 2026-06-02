@@ -138,6 +138,9 @@ app.use("/api/feedback", require("./routes/feedbackRoutes"));
 // Chat routes
 app.use("/api/chat", require("./routes/chatRoutes"));
 
+// AI routes (Gemini proxy)
+app.use("/api/ai", require("./routes/aiRoutes"));
+
 // 404 Handler
 app.use((req, res) => {
   res.status(404).json({
