@@ -116,11 +116,24 @@ class _AdminOrdersPageState extends State<AdminOrdersPage>
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          _orders = data['orders'] ?? data['data'] ?? [];
-          _loading = false;
-        });
+       final decoded = jsonDecode(response.body);
+
+List rawList = [];
+
+if (decoded is Map && decoded['orders'] is List) {
+  rawList = decoded['orders'];
+} else if (decoded is Map && decoded['data'] is List) {
+  rawList = decoded['data'];
+}
+
+setState(() {
+  _orders = rawList
+      .whereType<Map>()
+      .map((e) => Map<String, dynamic>.from(e))
+      .toList();
+
+  _loading = false;
+});
       } else {
         throw Exception('Failed to load orders');
       }
@@ -166,25 +179,39 @@ class _AdminOrdersPageState extends State<AdminOrdersPage>
   }
 
   List<dynamic> get _filteredOrders {
-    return _orders.where((order) {
-      final status = order['status']?.toString().toLowerCase() ?? '';
-      final chef = order['chefId'];
-      final user = order['userId'];
-      final chefName = (chef?['businessName'] ?? chef?['name'] ?? '')
-          .toLowerCase();
-      final userName = (user?['name'] ?? order['customerName'] ?? '')
-          .toLowerCase();
-      final orderId = order['_id'].toString().toLowerCase();
-      final query = _searchQuery.toLowerCase();
+  return _orders.where((order) {
+    if (order is! Map) return false;
 
-      final matchesSearch =
-          chefName.contains(query) ||
-          userName.contains(query) ||
-          orderId.contains(query);
+    final status = (order['status'] ?? '').toString().toLowerCase();
 
-      return status == _selectedTab && matchesSearch;
-    }).toList();
-  }
+    final chef = order['chefId'];
+    final user = order['userId'];
+
+    final chefName = (chef is Map)
+        ? (chef['businessName'] ?? chef['name'] ?? '')
+            .toString()
+            .toLowerCase()
+        : '';
+
+    final userName = (user is Map)
+        ? (user['name'] ?? '')
+            .toString()
+            .toLowerCase()
+        : (order['customerName'] ?? '')
+            .toString()
+            .toLowerCase();
+
+    final orderId = (order['_id'] ?? '').toString().toLowerCase();
+    final query = _searchQuery.toLowerCase();
+
+    final matchesSearch =
+        chefName.contains(query) ||
+        userName.contains(query) ||
+        orderId.contains(query);
+
+    return status == _selectedTab && matchesSearch;
+  }).toList();
+}
 
   String _formatDate(String? dateString) {
     if (dateString == null) return 'N/A';
@@ -230,12 +257,12 @@ class _AdminOrdersPageState extends State<AdminOrdersPage>
         return status;
     }
   }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      body: Column(
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: const Color(0xFFF8F9FA),
+    body: SafeArea(
+      child: Column(
         children: [
           const SizedBox(height: 14),
 
@@ -264,21 +291,35 @@ class _AdminOrdersPageState extends State<AdminOrdersPage>
           _buildTabs(),
 
           Expanded(
-            child: _loading
-                ? _buildLoadingShimmer()
-                : _error.isNotEmpty
-                ? _buildErrorWidget()
-                : _filteredOrders.isEmpty
-                ? _buildEmptyWidget()
-                : RefreshIndicator(
+            child: Builder(
+              builder: (context) {
+                try {
+                  if (_loading) return _buildLoadingShimmer();
+
+                  if (_error.isNotEmpty) return _buildErrorWidget();
+
+                  if (_filteredOrders.isEmpty) return _buildEmptyWidget();
+
+                  return RefreshIndicator(
                     onRefresh: _loadOrders,
                     child: _buildOrdersList(),
-                  ),
+                  );
+                } catch (e) {
+                  return Center(
+                    child: Text(
+                      'Something went wrong',
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  );
+                }
+              },
+            ),
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   /// Fixed Tabs - Without overflow issues
   Widget _buildTabs() {
@@ -439,9 +480,15 @@ class _AdminOrdersPageState extends State<AdminOrdersPage>
 
   Widget _buildOrderCard(dynamic order) {
     final chef = order['chefId'];
-    final user = order['userId'];
-    final chefName = chef?['businessName'] ?? chef?['name'] ?? 'Unknown Chef';
-    final userName = user?['name'] ?? order['customerName'] ?? 'Unknown User';
+final user = order['userId'];
+
+final chefName = (chef is Map)
+    ? (chef['businessName'] ?? chef['name'] ?? 'Unknown Chef')
+    : 'Unknown Chef';
+
+final userName = (user is Map)
+    ? (user['name'] ?? 'Unknown User')
+    : (order['customerName'] ?? 'Unknown User');
     final dishName = order['dishName'] ?? '';
     final quantity = order['quantity'] ?? 1;
     final singlePrice = (order['price'] ?? 0).toDouble();

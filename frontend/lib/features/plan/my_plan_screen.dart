@@ -92,12 +92,8 @@ class _MyPlanScreenState extends State<MyPlanScreen>
     return (label: 'Obese', color: const Color(0xFFFF5E5E));
   }
 
-  ({
-    int dailyCalories,
-    int dailyProtein,
-    int dailyFat,
-    int dailyCarbs,
-  }) _resolveDailyTargets(
+  ({int dailyCalories, int dailyProtein, int dailyFat, int dailyCarbs})
+  _resolveDailyTargets(
     HomeProvider homeProvider,
     Map<String, dynamic> profile,
   ) {
@@ -177,11 +173,11 @@ class _MyPlanScreenState extends State<MyPlanScreen>
     final doc = pw.Document();
     const borderColor = PdfColors.grey300;
     const headerFill = PdfColor.fromInt(0xFFEAF6FF);
-   final sectionTitleStyle = pw.TextStyle(
-  fontSize: 14,
-  fontWeight: pw.FontWeight.bold,
-  color: PdfColors.blue,
-);
+    final sectionTitleStyle = pw.TextStyle(
+      fontSize: 14,
+      fontWeight: pw.FontWeight.bold,
+      color: PdfColors.blue,
+    );
 
     pw.Widget tableCell(
       String text, {
@@ -270,15 +266,19 @@ class _MyPlanScreenState extends State<MyPlanScreen>
               pw.Text('Daily targets', style: sectionTitleStyle),
               pw.SizedBox(height: 8),
               summaryTable([
-                ['Daily calories', dailyCalories > 0 ? '$dailyCalories kcal' : '--'],
+                [
+                  'Daily calories',
+                  dailyCalories > 0 ? '$dailyCalories kcal' : '--',
+                ],
                 ['Carbs (daily)', dailyCarbs > 0 ? '${dailyCarbs}g' : '--'],
-                ['Protein (daily)', dailyProtein > 0 ? '${dailyProtein}g' : '--'],
+                [
+                  'Protein (daily)',
+                  dailyProtein > 0 ? '${dailyProtein}g' : '--',
+                ],
                 ['Fat (daily)', dailyFat > 0 ? '${dailyFat}g' : '--'],
                 [
                   'BMI',
-                  bmi > 0
-                      ? '${bmi.toStringAsFixed(1)} ($bmiLabel)'
-                      : '--',
+                  bmi > 0 ? '${bmi.toStringAsFixed(1)} ($bmiLabel)' : '--',
                 ],
                 [
                   'Water goal (daily)',
@@ -302,9 +302,21 @@ class _MyPlanScreenState extends State<MyPlanScreen>
                     decoration: const pw.BoxDecoration(color: headerFill),
                     children: [
                       tableCell('Meal', bold: true),
-                      tableCell('Calories', bold: true, align: pw.TextAlign.center),
-                      tableCell('Carbs', bold: true, align: pw.TextAlign.center),
-                      tableCell('Protein', bold: true, align: pw.TextAlign.center),
+                      tableCell(
+                        'Calories',
+                        bold: true,
+                        align: pw.TextAlign.center,
+                      ),
+                      tableCell(
+                        'Carbs',
+                        bold: true,
+                        align: pw.TextAlign.center,
+                      ),
+                      tableCell(
+                        'Protein',
+                        bold: true,
+                        align: pw.TextAlign.center,
+                      ),
                       tableCell('Fat', bold: true, align: pw.TextAlign.center),
                     ],
                   ),
@@ -312,21 +324,45 @@ class _MyPlanScreenState extends State<MyPlanScreen>
                     (row) => pw.TableRow(
                       children: [
                         tableCell(row.label, bold: true),
-                        tableCell('${row.calories}', align: pw.TextAlign.center),
+                        tableCell(
+                          '${row.calories}',
+                          align: pw.TextAlign.center,
+                        ),
                         tableCell('${row.carbs}g', align: pw.TextAlign.center),
-                        tableCell('${row.protein}g', align: pw.TextAlign.center),
+                        tableCell(
+                          '${row.protein}g',
+                          align: pw.TextAlign.center,
+                        ),
                         tableCell('${row.fat}g', align: pw.TextAlign.center),
                       ],
                     ),
                   ),
                   pw.TableRow(
-                    decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+                    decoration: const pw.BoxDecoration(
+                      color: PdfColors.grey100,
+                    ),
                     children: [
                       tableCell('Daily total', bold: true),
-                      tableCell('$dailyCalories', bold: true, align: pw.TextAlign.center),
-                      tableCell('${dailyCarbs}g', bold: true, align: pw.TextAlign.center),
-                      tableCell('${dailyProtein}g', bold: true, align: pw.TextAlign.center),
-                      tableCell('${dailyFat}g', bold: true, align: pw.TextAlign.center),
+                      tableCell(
+                        '$dailyCalories',
+                        bold: true,
+                        align: pw.TextAlign.center,
+                      ),
+                      tableCell(
+                        '${dailyCarbs}g',
+                        bold: true,
+                        align: pw.TextAlign.center,
+                      ),
+                      tableCell(
+                        '${dailyProtein}g',
+                        bold: true,
+                        align: pw.TextAlign.center,
+                      ),
+                      tableCell(
+                        '${dailyFat}g',
+                        bold: true,
+                        align: pw.TextAlign.center,
+                      ),
                     ],
                   ),
                 ],
@@ -337,7 +373,10 @@ class _MyPlanScreenState extends State<MyPlanScreen>
               pw.Text(
                 'Generated ${DateTime.now().toLocal()}',
                 textAlign: pw.TextAlign.center,
-                style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
+                style: const pw.TextStyle(
+                  fontSize: 9,
+                  color: PdfColors.grey600,
+                ),
               ),
             ],
           );
@@ -446,7 +485,10 @@ class _MyPlanScreenState extends State<MyPlanScreen>
                     shape: const CircleBorder(),
                     child: IconButton(
                       tooltip: 'Export PDF',
-                      icon: const Icon(Icons.print_rounded, color: Colors.white),
+                      icon: const Icon(
+                        Icons.print_rounded,
+                        color: Colors.white,
+                      ),
                       onPressed: onPrint,
                     ),
                   ),
@@ -513,14 +555,6 @@ class _MyPlanScreenState extends State<MyPlanScreen>
         ),
       ],
     );
-  }
-
-  IconData _summaryIcon(String label) {
-    if (label.contains('calories')) return Icons.local_fire_department_rounded;
-    if (label.contains('Carbs')) return Icons.grain_rounded;
-    if (label.contains('Protein')) return Icons.fitness_center_rounded;
-    if (label.contains('Fat')) return Icons.water_drop_outlined;
-    return Icons.monitor_weight_outlined;
   }
 
   IconData _mealIcon(String mealLabel) {
@@ -604,116 +638,112 @@ class _MyPlanScreenState extends State<MyPlanScreen>
     );
   }
 
-  Widget _summaryTable({
-    required int dailyCalories,
-    required int dailyCarbs,
-    required int dailyProtein,
-    required int dailyFat,
-    required double bmi,
-    required String bmiLabel,
-    required Color bmiColor,
-  }) {
+  Widget _calorieCard(int dailyCalories) {
     return _card(
-      child: Table(
-        columnWidths: const {
-          0: FlexColumnWidth(1.35),
-          1: FlexColumnWidth(1),
-        },
-        border: TableBorder(
-          horizontalInside: BorderSide(
-            color: AppColors.royalBlue.withValues(alpha: 0.08),
-          ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.caloriesBg,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                Icons.local_fire_department_rounded,
+                color: AppColors.caloriesPurple,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Daily calories',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.blueGray,
+                ),
+              ),
+            ),
+            Text(
+              dailyCalories > 0 ? '$dailyCalories kcal' : '--',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: AppColors.caloriesPurple,
+              ),
+            ),
+          ],
         ),
-        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-        children: [
-          _summaryRow(
-            label: 'Daily calories',
-            value: dailyCalories > 0 ? '$dailyCalories kcal' : '--',
-            valueColor: AppColors.caloriesPurple,
-          ),
-          _summaryRow(
-            label: 'Carbs (daily)',
-            value: dailyCarbs > 0 ? '${dailyCarbs}g' : '--',
-            valueColor: AppColors.macroCarbs,
-          ),
-          _summaryRow(
-            label: 'Protein (daily)',
-            value: dailyProtein > 0 ? '${dailyProtein}g' : '--',
-            valueColor: AppColors.macroProtein,
-          ),
-          _summaryRow(
-            label: 'Fat (daily)',
-            value: dailyFat > 0 ? '${dailyFat}g' : '--',
-            valueColor: AppColors.macroFat,
-          ),
-          _summaryRow(
-            label: 'BMI',
-            value: bmi > 0 ? bmi.toStringAsFixed(1) : '--',
-            subtitle: 'Status: $bmiLabel',
-            valueColor: bmiColor,
-          ),
-        ],
       ),
     );
   }
 
-  TableRow _summaryRow({
-    required String label,
-    required String value,
-    String? subtitle,
-    Color? valueColor,
+  Widget _bmiCard({
+    required double bmi,
+    required String bmiLabel,
+    required Color bmiColor,
   }) {
-    return TableRow(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-          child: Row(
-            children: [
-              Icon(_summaryIcon(label), size: 18, color: AppColors.navy),
-              const SizedBox(width: 8),
-              Expanded(
+    final hasBmi = bmi > 0;
+
+    return _card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: bmiColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(Icons.monitor_weight_outlined, color: bmiColor),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'BMI',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.blueGray,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              hasBmi ? bmi.toStringAsFixed(1) : '--',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: hasBmi ? bmiColor : AppColors.deepBlue,
+              ),
+            ),
+            const Spacer(),
+            if (hasBmi)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: bmiColor.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: bmiColor.withValues(alpha: 0.35)),
+                ),
                 child: Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.blueGray,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 12, 14, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                value,
-                textAlign: TextAlign.end,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                  color: valueColor ?? AppColors.deepBlue,
-                ),
-              ),
-              if (subtitle != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  textAlign: TextAlign.end,
+                  bmiLabel,
                   style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.blueGray.withValues(alpha: 0.9),
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: bmiColor,
                   ),
                 ),
-              ],
-            ],
-          ),
+              ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -824,8 +854,10 @@ class _MyPlanScreenState extends State<MyPlanScreen>
     required double dailyWaterGoalL,
     required ValueChanged<double> onGoalChangedLiters,
   }) {
-    final editingValue =
-        (_pendingWaterGoalL ?? dailyWaterGoalL).clamp(0.5, 6.0);
+    final editingValue = (_pendingWaterGoalL ?? dailyWaterGoalL).clamp(
+      0.5,
+      6.0,
+    );
     final displayGoal = _isEditingWaterGoal ? editingValue : dailyWaterGoalL;
 
     return _card(
@@ -836,7 +868,10 @@ class _MyPlanScreenState extends State<MyPlanScreen>
           children: [
             Row(
               children: [
-                const Icon(Icons.water_drop_outlined, color: AppColors.deepBlue),
+                const Icon(
+                  Icons.water_drop_outlined,
+                  color: AppColors.deepBlue,
+                ),
                 const SizedBox(width: 8),
                 const Text(
                   'Daily water goal',
@@ -979,8 +1014,10 @@ class _MyPlanScreenState extends State<MyPlanScreen>
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   onPressed: () {
-                    final value = (_pendingWaterGoalL ?? dailyWaterGoalL)
-                        .clamp(0.5, 6.0);
+                    final value = (_pendingWaterGoalL ?? dailyWaterGoalL).clamp(
+                      0.5,
+                      6.0,
+                    );
                     onGoalChangedLiters(value);
                     setState(() {
                       _isEditingWaterGoal = false;
@@ -1054,16 +1091,16 @@ class _MyPlanScreenState extends State<MyPlanScreen>
     final dailyWaterGoalL = homeProvider.dailyWaterGoalL;
 
     void exportPdf() => _exportPdf(
-          userName: userName,
-          dailyCalories: dailyCalories,
-          dailyProtein: dailyProtein,
-          dailyFat: dailyFat,
-          dailyCarbs: dailyCarbs,
-          bmi: bmi,
-          bmiLabel: status.label,
-          mealRows: mealRows,
-          dailyWaterGoalL: dailyWaterGoalL,
-        );
+      userName: userName,
+      dailyCalories: dailyCalories,
+      dailyProtein: dailyProtein,
+      dailyFat: dailyFat,
+      dailyCarbs: dailyCarbs,
+      bmi: bmi,
+      bmiLabel: status.label,
+      mealRows: mealRows,
+      dailyWaterGoalL: dailyWaterGoalL,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -1087,11 +1124,39 @@ class _MyPlanScreenState extends State<MyPlanScreen>
                           Icons.flag_circle_rounded,
                         ),
                         const SizedBox(height: 10),
-                        _summaryTable(
-                          dailyCalories: dailyCalories,
-                          dailyCarbs: dailyCarbs,
-                          dailyProtein: dailyProtein,
-                          dailyFat: dailyFat,
+                        _calorieCard(dailyCalories),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            _macroChip(
+                              label: 'Carbs',
+                              value: dailyCarbs > 0 ? '${dailyCarbs}g' : '--',
+                              color: AppColors.macroCarbs,
+                              background: AppColors.carbsBg,
+                              icon: Icons.grain_rounded,
+                            ),
+                            const SizedBox(width: 8),
+                            _macroChip(
+                              label: 'Protein',
+                              value: dailyProtein > 0
+                                  ? '${dailyProtein}g'
+                                  : '--',
+                              color: AppColors.macroProtein,
+                              background: AppColors.proteinBg,
+                              icon: Icons.fitness_center_rounded,
+                            ),
+                            const SizedBox(width: 8),
+                            _macroChip(
+                              label: 'Fat',
+                              value: dailyFat > 0 ? '${dailyFat}g' : '--',
+                              color: AppColors.macroFat,
+                              background: AppColors.fatBg,
+                              icon: Icons.opacity_rounded,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        _bmiCard(
                           bmi: bmi,
                           bmiLabel: status.label,
                           bmiColor: status.color,
@@ -1099,40 +1164,9 @@ class _MyPlanScreenState extends State<MyPlanScreen>
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  _animatedBlock(
-                    index: 1,
-                    child: Row(
-                      children: [
-                        _macroChip(
-                          label: 'Carbs',
-                          value: dailyCarbs > 0 ? '${dailyCarbs}g' : '--',
-                          color: AppColors.macroCarbs,
-                          background: AppColors.carbsBg,
-                          icon: Icons.grain_rounded,
-                        ),
-                        const SizedBox(width: 8),
-                        _macroChip(
-                          label: 'Protein',
-                          value: dailyProtein > 0 ? '${dailyProtein}g' : '--',
-                          color: AppColors.macroProtein,
-                          background: AppColors.proteinBg,
-                          icon: Icons.fitness_center_rounded,
-                        ),
-                        const SizedBox(width: 8),
-                        _macroChip(
-                          label: 'Fat',
-                          value: dailyFat > 0 ? '${dailyFat}g' : '--',
-                          color: AppColors.macroFat,
-                          background: AppColors.fatBg,
-                          icon: Icons.opacity_rounded,
-                        ),
-                      ],
-                    ),
-                  ),
                   const SizedBox(height: 18),
                   _animatedBlock(
-                    index: 2,
+                    index: 1,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1157,14 +1191,11 @@ class _MyPlanScreenState extends State<MyPlanScreen>
                   ),
                   const SizedBox(height: 18),
                   _animatedBlock(
-                    index: 3,
+                    index: 2,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _sectionTitle(
-                          'Hydration',
-                          Icons.water_drop_rounded,
-                        ),
+                        _sectionTitle('Hydration', Icons.water_drop_rounded),
                         const SizedBox(height: 10),
                         _waterCard(
                           dailyWaterGoalL: dailyWaterGoalL,
@@ -1176,7 +1207,7 @@ class _MyPlanScreenState extends State<MyPlanScreen>
                   ),
                   const SizedBox(height: 14),
                   _animatedBlock(
-                    index: 4,
+                    index: 3,
                     child: _card(
                       child: Padding(
                         padding: const EdgeInsets.all(14),
