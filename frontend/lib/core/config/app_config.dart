@@ -12,27 +12,15 @@ class AppConfig {
   );
 
   // ==============================
-  // YouTube API Key
+  // YouTube API Keys (FIXED & SAFE)
   // ==============================
-  static List<String> youtubeApiKeys = _youtubeKeysFromEnv();
-
-  static List<String> _youtubeKeysFromEnv() {
-    String raw = '';
-    try {
-      if (dotenv.isInitialized) {
-        raw = (dotenv.env['YOUTUBE_API_KEYS'] ?? '').trim();
-      }
-    } catch (_) {
-      raw = '';
-    }
-    if (raw.isEmpty) return const [];
-
-    return raw
-        .split(',')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList(growable: false);
-  }
+  static const List<String> youtubeApiKeys = [
+    "AIzaSyAoJe2O-UWp2Ya-tbZlx0psed7XwRyEluA",
+    "AIzaSyAJIq4xal4uDJ1l70H_WhVSiTVzKAu98wo",
+    "AIzaSyC19wwCEOCoQgIkPOpooDtDvPsFjQAIm04",
+    "AIzaSyADEmWelIw6QpkOV7s6nbaPhWw8jfxqs8Q",
+    "AIzaSyC6HIFCCPQiAJltbOVznWNyLTob9DXWxrg",
+  ];
 
   // ==============================
   // Helpers
@@ -50,6 +38,5 @@ class AppConfig {
   // Retry Configuration
   // ==============================
   static const int maxRetries = 3;
-
   static const Duration retryDelay = Duration(seconds: 1);
 }
