@@ -12,6 +12,7 @@ import 'core/providers/like_provider.dart';
 import 'core/providers/follow_provider.dart';
 import 'core/services/cart_service.dart';
 import 'core/services/favorite_service.dart';
+import 'core/services/water_reminder_service.dart';
 
 import 'core/services/firebase_notification_handler.dart';
 import 'core/navigation/app_navigator.dart';
@@ -52,6 +53,7 @@ Future<void> main() async {
 
   await CartService.init();
   await FavoriteService.loadFavorites();
+  await WaterReminderService.initialize();
 
   runApp(
     MultiProvider(
