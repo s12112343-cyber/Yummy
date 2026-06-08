@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/features/screen/page_recipe_screen/recipes_page.dart';
 import 'package:lottie/lottie.dart';
@@ -220,7 +221,22 @@ class CustomBottomNav extends StatelessWidget {
     );
   }
 
+  double _addSheetMaxHeight(BuildContext context) {
+    final height = MediaQuery.of(context).size.height;
+    if (height < 620) return height * 0.88;
+    if (height < 760) return height * 0.80;
+    return height * 0.72;
+  }
+
   void _showAddMealOptions(BuildContext parentContext) {
+    final parentNavigator = Navigator.of(parentContext);
+    HomeProvider? homeProvider;
+    try {
+      homeProvider = Provider.of<HomeProvider>(parentContext, listen: false);
+    } catch (_) {
+      homeProvider = null;
+    }
+
     int currentWater = consumedWaterMl ?? 0;
     final int waterGoal = dailyWaterGoalMl ?? 0;
     int selectedWaterAddAmount = 250;
@@ -286,6 +302,8 @@ class CustomBottomNav extends StatelessWidget {
 
     showModalBottomSheet<void>(
       context: parentContext,
+      isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         bool showMealCards = true;
@@ -311,137 +329,145 @@ class CustomBottomNav extends StatelessWidget {
                   ),
                 );
               },
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.deepBlue.withOpacity(0.15),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return Container(
+                    margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                    constraints: BoxConstraints(
+                      maxHeight: _addSheetMaxHeight(context),
                     ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: AppColors.babyBlue,
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE7ECF1),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: AppColors.dark.withValues(alpha: 0.08),
+                    decoration: BoxDecoration(
+                      color: AppColors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.deepBlue.withOpacity(0.15),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
                         ),
-                      ),
-                      child: Row(
+                      ],
+                    ),
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Expanded(
-                            child: _buildAddTypeToggle(
-                              title: 'Add Meal',
-                              lottieAsset: 'assets/lottie/add meale.json',
-                              lottiePlayId: mealLottiePlayId,
-                              isActive: showMealCards,
-                              onTap: () {
+                          Container(
+                            width: 44,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: AppColors.babyBlue,
+                              borderRadius: BorderRadius.circular(100),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE7ECF1),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: AppColors.dark.withValues(alpha: 0.08),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: _buildAddTypeToggle(
+                                    title: 'Add Meal',
+                                    lottieAsset: 'assets/lottie/add meale.json',
+                                    lottiePlayId: mealLottiePlayId,
+                                    isActive: showMealCards,
+                                    onTap: () {
+                                      setSheetState(() {
+                                        showMealCards = true;
+                                        mealLottiePlayId++;
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _buildAddTypeToggle(
+                                    title: 'Add Water',
+                                    lottieAsset: 'assets/lottie/add water.json',
+                                    lottiePlayId: waterLottiePlayId,
+                                    isActive: !showMealCards,
+                                    onTap: () {
+                                      setSheetState(() {
+                                        showMealCards = false;
+                                        waterLottiePlayId++;
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          if (showMealCards)
+                            GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: options.length,
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 2,
+                                    crossAxisSpacing: 16,
+                                    mainAxisSpacing: 16,
+                                    childAspectRatio: 1.35,
+                                  ),
+                              itemBuilder: (context, index) {
+                                final option = options[index];
+                                return _buildQuickAddSquare(
+                                  label: option.label,
+                                  gradient: option.gradient,
+                                  plusColor: option.plusColor,
+                                  calorieStatus: option.calorieStatus,
+                                  isOver: option.isOver,
+                                  onTap: () {
+                                    Navigator.of(sheetContext).pop();
+                                    Future.microtask(() {
+                                      parentNavigator.push(
+                                        MaterialPageRoute(
+                                          builder: (_) => AddMealManualScreen(
+                                            mealType: option.mealType,
+                                            mealTitle: option.label,
+                                            targetCalories:
+                                                option.targetCalories,
+                                            consumedCalories:
+                                                option.consumedCalories,
+                                            mealImageAsset: option.imageAsset,
+                                            selectedDate: selectedDate,
+                                          ),
+                                        ),
+                                      );
+                                    });
+                                  },
+                                );
+                              },
+                            )
+                          else
+                            _buildAddWaterCard(
+                              currentWaterMl: currentWater,
+                              dailyGoalMl: waterGoal,
+                              selectedAmount: selectedWaterAddAmount,
+                              onAddWater: (amount) {
+                                onAddWaterTap?.call(amount);
+                                homeProvider?.fetchDailyMealSummary();
+
                                 setSheetState(() {
-                                  showMealCards = true;
-                                  mealLottiePlayId++;
+                                  selectedWaterAddAmount = amount;
+                                  currentWater += amount;
                                 });
                               },
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _buildAddTypeToggle(
-                              title: 'Add Water',
-                              lottieAsset: 'assets/lottie/add water.json',
-                              lottiePlayId: waterLottiePlayId,
-                              isActive: !showMealCards,
-                              onTap: () {
-                                setSheetState(() {
-                                  showMealCards = false;
-                                  waterLottiePlayId++;
-                                });
-                              },
-                            ),
-                          ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    if (showMealCards)
-                      GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: options.length,
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              crossAxisSpacing: 16,
-                              mainAxisSpacing: 16,
-                              childAspectRatio: 1.35,
-                            ),
-                        itemBuilder: (context, index) {
-                          final option = options[index];
-                          return _buildQuickAddSquare(
-                            label: option.label,
-                            gradient: option.gradient,
-                            plusColor: option.plusColor,
-                            calorieStatus: option.calorieStatus,
-                            isOver: option.isOver,
-                            onTap: () {
-                              Navigator.of(sheetContext).pop();
-                              Navigator.of(parentContext).push(
-                                MaterialPageRoute(
-                                  builder: (_) => AddMealManualScreen(
-                                    mealType: option.mealType,
-                                    mealTitle: option.label,
-                                    targetCalories: option.targetCalories,
-                                    consumedCalories: option.consumedCalories,
-                                    mealImageAsset: option.imageAsset,
-                                    selectedDate: selectedDate,
-                                  ),
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      )
-                    else
-                      _buildAddWaterCard(
-                        currentWaterMl: currentWater,
-                        dailyGoalMl: waterGoal,
-                        selectedAmount: selectedWaterAddAmount,
-                        onAddWater: (amount) {
-                          onAddWaterTap?.call(amount);
-                          // Attempt to refresh provider-backed summary so Home reflects changes immediately.
-                          try {
-                            Provider.of<HomeProvider>(
-                              parentContext,
-                              listen: false,
-                            ).fetchDailyMealSummary();
-                          } catch (_) {}
-
-                          setSheetState(() {
-                            selectedWaterAddAmount = amount;
-                            currentWater += amount;
-                          });
-                        },
-                      ),
-                  ],
-                ),
+                  );
+                },
               ),
             );
           },
@@ -915,6 +941,253 @@ class CustomBottomNav extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class CustomWebSideNav extends StatelessWidget {
+  final int currentIndex;
+  final DateTime? selectedDate;
+  final int? dailyCalories;
+  final String? goal;
+  final Map<String, int>? mealConsumedCalories;
+  final int? consumedWaterMl;
+  final int? dailyWaterGoalMl;
+  final ValueChanged<int>? onAddWaterTap;
+
+  const CustomWebSideNav({
+    super.key,
+    required this.currentIndex,
+    this.selectedDate,
+    this.dailyCalories,
+    this.goal,
+    this.mealConsumedCalories,
+    this.consumedWaterMl,
+    this.dailyWaterGoalMl,
+    this.onAddWaterTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final nav = CustomBottomNav(
+      currentIndex: currentIndex,
+      selectedDate: selectedDate,
+      dailyCalories: dailyCalories,
+      goal: goal,
+      mealConsumedCalories: mealConsumedCalories,
+      consumedWaterMl: consumedWaterMl,
+      dailyWaterGoalMl: dailyWaterGoalMl,
+      onAddWaterTap: onAddWaterTap,
+    );
+
+    return Container(
+      width: 270,
+      decoration: BoxDecoration(
+        color: AppColors.navy,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.royalBlue.withOpacity(0.18),
+            blurRadius: 24,
+            offset: const Offset(8, 0),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 28),
+            const Text(
+              'Yummy',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 34,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.6,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Healthy Food App',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.65),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 34),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                itemCount: CustomBottomNav.items.length,
+                itemBuilder: (context, index) {
+                  final item = CustomBottomNav.items[index];
+                  final isActive = currentIndex == index;
+                  final isAdd = index == 2;
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(18),
+                      onTap: () => nav._handleTap(context, index),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 15,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isActive
+                              ? Colors.white.withOpacity(0.13)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: isActive
+                                ? Colors.white.withOpacity(0.16)
+                                : Colors.transparent,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: isAdd
+                                    ? AppColors.white
+                                    : isActive
+                                    ? AppColors.lightBlue.withOpacity(0.28)
+                                    : Colors.white.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Icon(
+                                item.icon,
+                                color: isAdd
+                                    ? AppColors.navy
+                                    : isActive
+                                    ? Colors.white
+                                    : Colors.white60,
+                                size: isAdd ? 25 : 21,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              item.label,
+                              style: TextStyle(
+                                color: isActive ? Colors.white : Colors.white60,
+                                fontSize: 15,
+                                fontWeight: isActive
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                            const Spacer(),
+                            if (isActive)
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.lightBlue,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// استخدمي هذا بالصفحات لو بدك الويب يكون Sidebar والموبايل Bottom Nav.
+/// ملاحظة: لا تلفّي فيه Scaffold كامل، لفّي فيه محتوى الصفحة فقط.
+class CustomResponsiveNavShell extends StatelessWidget {
+  final int currentIndex;
+  final Widget child;
+  final DateTime? selectedDate;
+  final int? dailyCalories;
+  final String? goal;
+  final Map<String, int>? mealConsumedCalories;
+  final int? consumedWaterMl;
+  final int? dailyWaterGoalMl;
+  final ValueChanged<int>? onAddWaterTap;
+  final Widget? floatingActionButton;
+  final FloatingActionButtonLocation? floatingActionButtonLocation;
+  final Color backgroundColor;
+  final Widget? endDrawer;
+  final GlobalKey<ScaffoldState>? scaffoldKey;
+
+  const CustomResponsiveNavShell({
+    super.key,
+    required this.currentIndex,
+    required this.child,
+    this.selectedDate,
+    this.dailyCalories,
+    this.goal,
+    this.mealConsumedCalories,
+    this.consumedWaterMl,
+    this.dailyWaterGoalMl,
+    this.onAddWaterTap,
+    this.floatingActionButton,
+    this.floatingActionButtonLocation,
+    this.backgroundColor = AppColors.background,
+    this.endDrawer,
+    this.scaffoldKey,
+  });
+
+  bool _isWebLayout(BuildContext context) {
+    return kIsWeb && MediaQuery.of(context).size.width >= 900;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isWeb = _isWebLayout(context);
+
+    return Scaffold(
+      key: scaffoldKey,
+      extendBody: true,
+      backgroundColor: backgroundColor,
+      endDrawer: endDrawer,
+      body: SafeArea(
+        bottom: false,
+        child: isWeb
+            ? Row(
+                children: [
+                  CustomWebSideNav(
+                    currentIndex: currentIndex,
+                    selectedDate: selectedDate,
+                    dailyCalories: dailyCalories,
+                    goal: goal,
+                    mealConsumedCalories: mealConsumedCalories,
+                    consumedWaterMl: consumedWaterMl,
+                    dailyWaterGoalMl: dailyWaterGoalMl,
+                    onAddWaterTap: onAddWaterTap,
+                  ),
+                  Expanded(child: child),
+                ],
+              )
+            : child,
+      ),
+      floatingActionButton: floatingActionButton,
+      floatingActionButtonLocation: floatingActionButtonLocation,
+      bottomNavigationBar: isWeb
+          ? null
+          : CustomBottomNav(
+              currentIndex: currentIndex,
+              selectedDate: selectedDate,
+              dailyCalories: dailyCalories,
+              goal: goal,
+              mealConsumedCalories: mealConsumedCalories,
+              consumedWaterMl: consumedWaterMl,
+              dailyWaterGoalMl: dailyWaterGoalMl,
+              onAddWaterTap: onAddWaterTap,
+            ),
     );
   }
 }

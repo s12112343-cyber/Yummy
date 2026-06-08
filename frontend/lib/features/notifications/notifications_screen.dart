@@ -96,6 +96,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'order_status':
         return Icons.delivery_dining_rounded;
 
+      case 'water':
+        return Icons.water_drop_rounded;
+
       default:
         return Icons.notifications_rounded;
     }
@@ -114,6 +117,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
       case 'order_status':
         return Colors.orange;
+
+      case 'water':
+        return const Color(0xFF2D9CDB);
 
       default:
         return AppColors.deepBlue;
@@ -303,11 +309,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         border: Border.all(
           color: item.isRead
               ? const Color(0xFFE4EDF7)
-              : color.withOpacity(0.18),
+              : color.withValues(alpha: 0.18),
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF123456).withOpacity(0.04),
+            color: const Color(0xFF123456).withValues(alpha: 0.04),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -321,7 +327,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           children: [
             CircleAvatar(
               radius: 24,
-              backgroundColor: color.withOpacity(0.12),
+              backgroundColor: color.withValues(alpha: 0.12),
               backgroundImage: avatarUrl.isNotEmpty
                   ? NetworkImage(avatarUrl)
                   : null,
@@ -360,7 +366,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               Icon(
                 Icons.arrow_outward_rounded,
                 size: 16,
-                color: AppColors.blueGray.withOpacity(0.7),
+                color: AppColors.blueGray.withValues(alpha: 0.7),
               ),
           ],
         ),
@@ -430,7 +436,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF0F2F57).withOpacity(0.2),
+                              color: const Color(
+                                0xFF0F2F57,
+                              ).withValues(alpha: 0.2),
                               blurRadius: 22,
                               offset: const Offset(0, 10),
                             ),
@@ -442,7 +450,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               width: 54,
                               height: 54,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.16),
+                                color: Colors.white.withValues(alpha: 0.16),
                                 borderRadius: BorderRadius.circular(18),
                               ),
                               child: const Icon(
@@ -493,7 +501,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         child: Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.08),
+                            color: Colors.red.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(18),
                           ),
                           child: Text(

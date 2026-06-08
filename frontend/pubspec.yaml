@@ -27,7 +27,6 @@ dependencies:
   firebase_core: ^4.7.0
   firebase_messaging: ^16.2.0
   flutter_local_notifications: ^21.0.0
-  timezone: ^0.11.0
   socket_io_client: ^3.1.4
   cached_network_image: ^3.4.1
   fl_chart: ^0.68.0
@@ -39,6 +38,8 @@ dependencies:
   pdf: ^3.11.3
   printing: ^5.14.2
   flutter_dotenv: ^6.0.1
+  timezone: ^0.11.0
+  geolocator: ^14.0.2
 
 dev_dependencies:
   flutter_test:

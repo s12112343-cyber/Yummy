@@ -36,6 +36,8 @@ const notificationSchema = new mongoose.Schema(
         "review",
         "recipe_review",
         "order_status",
+        "water",
+        "meal_reminder",
       ],
       required: true,
       index: true,

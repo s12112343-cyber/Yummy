@@ -6,7 +6,7 @@ const { sendPushNotification } = require("./firebaseAdmin");
 async function buildActorSnapshot(actorId) {
   if (!actorId) {
     return {
-      actorName: "User",
+      actorName: "Yummy",
       actorImageUrl: "",
       fcmTokens: [],
     };

@@ -4,6 +4,7 @@ const UserProfile = require("../models/UserProfile");
 const { analyzeQuickAddText } = require("../services/quickAddNutritionService");
 const { analyzeFoodImageWithAI } = require("../services/aiFoodVisionService");
 const { assessMealRestrictions } = require("../utils/mealRestrictionRules");
+const { scheduleWaterReminders } = require("../services/waterReminderScheduler");
 const fs = require("fs/promises");
 
 const allowedMealTypes = new Set(["breakfast", "lunch", "snack", "dinner"]);
@@ -217,6 +218,15 @@ const getDailySummary = async (req, res) => {
       user: userId,
       date_key: requestedDateKey,
     }).lean();
+
+    if (waterEntry) {
+      scheduleWaterReminders({
+        userId,
+        dateKey: requestedDateKey,
+        consumedWaterMl: numberOrZero(waterEntry.consumed_water_ml),
+        dailyWaterGoalMl: numberOrZero(waterEntry.daily_water_goal_ml),
+      });
+    }
 
     const summary = {
       calories: 0,
@@ -471,8 +481,16 @@ const updateDailyWater = async (req, res) => {
       }
     ).lean();
 
+    const reminderSchedule = scheduleWaterReminders({
+      userId,
+      dateKey,
+      consumedWaterMl: numberOrZero(waterEntry.consumed_water_ml),
+      dailyWaterGoalMl: numberOrZero(waterEntry.daily_water_goal_ml),
+    });
+
     return res.status(200).json({
       message: "Water updated successfully",
+      reminders: reminderSchedule,
       water: {
         consumedWaterMl: numberOrZero(waterEntry.consumed_water_ml),
         dailyWaterGoalMl: numberOrZero(waterEntry.daily_water_goal_ml),

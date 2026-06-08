@@ -1,24 +1,27 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:frontend/core/services/favorite_service.dart';
-import '../../home/home_screen.dart';
-import 'chef_profile_screen.dart';
-import 'category_chefs_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
-import '../../../core/services/auth_service.dart';
-import '../../../shared/custom_bottom_nav.dart';
 import 'package:provider/provider.dart';
-import '../../../core/providers/home_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../../core/config/app_config.dart';
+import '../../../core/providers/home_provider.dart';
+import '../../../core/services/auth_service.dart';
 import '../../../models/category_model.dart';
+import '../../../shared/custom_bottom_nav.dart';
+import '../../home/home_screen.dart';
 import 'CartScreen.dart';
+import 'category_chefs_screen.dart';
+import 'chef_profile_screen.dart';
 import 'favorites_page.dart';
 import 'recipe_detail_screen.dart';
 
-// ─── Palette ────────────────────────────────────────────────────────────────
+// ─── Colour Palette ──────────────────────────────────────────────────────────
 const _kNavy = Color(0xFF001F3F);
 const _kBlue = Color(0xFF005EB2);
 const _kBlueLight = Color(0xFF4597FE);
@@ -34,15 +37,116 @@ const _kError = Color(0xFFBA1A1A);
 const _kAmber = Color(0xFFFBBF24);
 const _kGreen = Color(0xFF10B981);
 
-// ✅ الدالة المعدلة للتعامل مع List أو String
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/// Converts a specialty field that may be a List or a String into a String.
 String safeString(dynamic value) {
   if (value == null) return '';
-  if (value is List) {
-    return value.map((e) => e.toString()).join(', ');
-  }
+  if (value is List) return value.map((e) => e.toString()).join(', ');
   return value.toString();
 }
 
+/// Returns an absolute image URL from a relative or absolute path.
+String fullImageUrl(dynamic image) {
+  if (image == null) return '';
+  String img = image.toString().trim();
+  if (img.isEmpty) return '';
+
+  if (img.startsWith('http://') || img.startsWith('https://')) return img;
+
+  img = img
+      .replaceAll('http://localhost:5000', '')
+      .replaceAll('http://127.0.0.1:5000', '');
+
+  if (!img.startsWith('/uploads/')) {
+    img = img.startsWith('uploads/') ? '/$img' : '/uploads/$img';
+  }
+
+  final base = AppConfig.baseUrl.replaceAll('/api', '');
+  return '$base$img';
+}
+
+final Map<String, List<String>> _palestineAreaKeywords = {
+  'القدس': ['القدس', 'jerusalem', 'al quds'],
+  'رام الله': ['رام الله', 'ramallah', 'ram allah', 'البيرة', 'al bireh'],
+  'نابلس': ['نابلس', 'nablus'],
+  'الخليل': ['الخليل', 'hebron'],
+  'بيت لحم': ['بيت لحم', 'bethlehem'],
+  'جنين': ['جنين', 'jenin'],
+  'طولكرم': ['طولكرم', 'tulkarm', 'tulkarem'],
+  'قلقيلية': ['قلقيلية', 'qalqilya', 'qalqilia'],
+  'سلفيت': ['سلفيت', 'salfit'],
+  'أريحا': ['أريحا', 'اريحا', 'jericho'],
+  'طوباس': ['طوباس', 'tubas'],
+  'غزة': ['غزة', 'gaza'],
+};
+
+final Map<String, ({double lat, double lng})> _palestineAreaCenters = {
+  'القدس': (lat: 31.7683, lng: 35.2137),
+  'رام الله': (lat: 31.9038, lng: 35.2034),
+  'نابلس': (lat: 32.2211, lng: 35.2544),
+  'الخليل': (lat: 31.5326, lng: 35.0998),
+  'بيت لحم': (lat: 31.7054, lng: 35.2024),
+  'جنين': (lat: 32.4594, lng: 35.3009),
+  'طولكرم': (lat: 32.3104, lng: 35.0286),
+  'قلقيلية': (lat: 32.1960, lng: 34.9819),
+  'سلفيت': (lat: 32.0837, lng: 35.1808),
+  'أريحا': (lat: 31.8560, lng: 35.4599),
+  'طوباس': (lat: 32.3209, lng: 35.3699),
+  'غزة': (lat: 31.5017, lng: 34.4668),
+};
+
+String _normalizeLocationText(String value) {
+  return value
+      .toLowerCase()
+      .replaceAll('أ', 'ا')
+      .replaceAll('إ', 'ا')
+      .replaceAll('آ', 'ا')
+      .replaceAll('ة', 'ه')
+      .replaceAll('ى', 'ي')
+      .replaceAll(RegExp(r'[,،\-_/]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+}
+
+String _areaFromText(String value) {
+  final normalized = _normalizeLocationText(value);
+
+  for (final entry in _palestineAreaKeywords.entries) {
+    final matched = entry.value.any((keyword) {
+      return normalized.contains(_normalizeLocationText(keyword));
+    });
+
+    if (matched) return entry.key;
+  }
+
+  return value.trim();
+}
+
+String _nearestAreaFromCoordinates(double latitude, double longitude) {
+  String closestArea = 'رام الله';
+  double closestDistance = double.infinity;
+
+  for (final entry in _palestineAreaCenters.entries) {
+    final distance = Geolocator.distanceBetween(
+      latitude,
+      longitude,
+      entry.value.lat,
+      entry.value.lng,
+    );
+
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestArea = entry.key;
+    }
+  }
+
+  return closestArea;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HomeCooksScreen
+// ─────────────────────────────────────────────────────────────────────────────
 class HomeCooksScreen extends StatefulWidget {
   const HomeCooksScreen({super.key});
 
@@ -52,38 +156,50 @@ class HomeCooksScreen extends StatefulWidget {
 
 class _HomeCooksScreenState extends State<HomeCooksScreen>
     with TickerProviderStateMixin {
-  // ── State ──────────────────────────────────────────────────────────────────
+  // ── User state ──────────────────────────────────────────────────────────────
   String _userName = '';
   String _userAvatar = '';
   bool _loading = true;
 
+  // ── Data ────────────────────────────────────────────────────────────────────
   List<dynamic> _chefs = [];
   List<dynamic> _filteredChefs = [];
   List<dynamic> _trendingRecipes = [];
   List<dynamic> _banners = [];
+  final List<dynamic> _allRecipes = [];
+
   bool _loadingChefs = true;
   bool _loadingBanners = true;
   bool _loadingTrending = true;
-  final TextEditingController _searchController = TextEditingController();
 
+  // ── Search ──────────────────────────────────────────────────────────────────
+  final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _locationController = TextEditingController();
+  final ScrollController _pageScrollController = ScrollController();
+  final GlobalKey _storesSectionKey = GlobalKey();
   String _searchQuery = '';
-  final List<dynamic> _allRecipes = [];
+  final List<String> _selectedUserLocations = [];
+  bool _isGettingGpsLocation = false;
+
+  String get _selectedUserLocation => _selectedUserLocations.join(', ');
+
+  // ── Favourites / Following ───────────────────────────────────────────────────
   int _selectedCategory = 0;
   Set<String> _favoriteChefs = {};
   Set<String> _favoriteRecipes = {};
   Set<String> _followingChefs = {};
 
-  // Banners slider
+  // ── Banner slider ────────────────────────────────────────────────────────────
   final PageController _bannerCtrl = PageController();
   int _bannerPage = 0;
   Timer? _bannerTimer;
 
-  // Animations
+  // ── Animations ───────────────────────────────────────────────────────────────
   late AnimationController _headerAnim;
   late AnimationController _contentAnim;
 
-  // ── Categories ─────────────────────────────────────────────────────────────
-  final List<CategoryModel> _categories = const [
+  // ── Categories ───────────────────────────────────────────────────────────────
+  static const List<CategoryModel> _categories = [
     CategoryModel(name: 'All', icon: Icons.grid_view_rounded, id: 'all'),
     CategoryModel(name: 'Pizza', icon: Icons.local_pizza_rounded, id: 'pizza'),
     CategoryModel(
@@ -114,18 +230,23 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
     CategoryModel(name: 'Sushi', icon: Icons.rice_bowl_rounded, id: 'sushi'),
   ];
 
+  // ── Lifecycle ────────────────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
+
     _headerAnim = AnimationController(
       duration: const Duration(milliseconds: 500),
       vsync: this,
     )..forward();
+
     _contentAnim = AnimationController(
       duration: const Duration(milliseconds: 700),
       vsync: this,
     )..forward();
+
     _loadUser();
+    _loadSavedUserLocation();
     _loadChefs();
     _loadBanners();
     _loadTrendingRecipes();
@@ -136,34 +257,197 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
   @override
   void dispose() {
     _bannerTimer?.cancel();
+    _searchController.dispose();
+    _locationController.dispose();
+    _pageScrollController.dispose();
     _bannerCtrl.dispose();
     _headerAnim.dispose();
     _contentAnim.dispose();
     super.dispose();
   }
 
-  // ── Data Loading ────────────────────────────────────────────────────────────
+  // ── Data Loading ─────────────────────────────────────────────────────────────
+
   Future<void> _loadUser() async {
     final p = await SharedPreferences.getInstance();
-    if (mounted) {
-      setState(() {
-        _userName = p.getString('userName') ?? 'Guest';
-        _userAvatar = p.getString('userAvatar') ?? '';
-        _loading = false;
-      });
+    if (!mounted) return;
+    setState(() {
+      _userName = p.getString('userName') ?? 'Guest';
+      _userAvatar = p.getString('userAvatar') ?? '';
+      _loading = false;
+    });
+  }
+
+  Future<void> _loadSavedUserLocation() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedLocations = prefs.getStringList('userSelectedLocations') ?? [];
+    final oldSavedLocation = prefs.getString('userSelectedLocation') ?? '';
+
+    final cleanedLocations = <String>{
+      ...savedLocations.map(_areaFromText).where((e) => e.trim().isNotEmpty),
+      if (oldSavedLocation.trim().isNotEmpty) _areaFromText(oldSavedLocation),
+    }.toList();
+
+    if (!mounted || cleanedLocations.isEmpty) return;
+
+    setState(() {
+      _selectedUserLocations
+        ..clear()
+        ..addAll(cleanedLocations);
+    });
+  }
+
+  Future<void> _saveUserLocations() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('userSelectedLocations', _selectedUserLocations);
+    await prefs.setString('userSelectedLocation', _selectedUserLocation);
+  }
+
+  void _applyLocationFilter(String location) {
+    final cleanedLocation = _areaFromText(location).trim();
+
+    if (cleanedLocation.isEmpty) return;
+
+    if (cleanedLocation == 'All') {
+      _clearLocationFilter();
+      return;
     }
+
+    final alreadyExists = _selectedUserLocations.any((item) {
+      return _normalizeLocationText(item) ==
+          _normalizeLocationText(cleanedLocation);
+    });
+
+    if (!alreadyExists) {
+      _selectedUserLocations.add(cleanedLocation);
+    }
+
+    _locationController.clear();
+    _applySelectedLocationFilters();
+  }
+
+  void _removeLocationFilter(String location) {
+    _selectedUserLocations.removeWhere((item) {
+      return _normalizeLocationText(item) == _normalizeLocationText(location);
+    });
+
+    _applySelectedLocationFilters();
+  }
+
+  void _applySelectedLocationFilters() {
+    final normalizedUserLocations = _selectedUserLocations
+        .map(_normalizeLocationText)
+        .where((item) => item.isNotEmpty)
+        .toList();
+
+    final filtered = normalizedUserLocations.isEmpty
+        ? _chefs
+        : _chefs.where((chef) {
+            final rawLocation = (chef['location'] ?? '').toString();
+            final chefLocation = _areaFromText(rawLocation);
+            final normalizedChefLocation = _normalizeLocationText(chefLocation);
+            final normalizedRawLocation = _normalizeLocationText(rawLocation);
+
+            return normalizedUserLocations.any((userLocation) {
+              return normalizedChefLocation.contains(userLocation) ||
+                  normalizedRawLocation.contains(userLocation) ||
+                  userLocation.contains(normalizedChefLocation);
+            });
+          }).toList();
+
+    if (!mounted) return;
+    setState(() {
+      _filteredChefs = filtered;
+    });
+
+    _saveUserLocations();
+  }
+
+  void _clearLocationFilter() {
+    if (!mounted) return;
+    setState(() {
+      _selectedUserLocations.clear();
+      _locationController.clear();
+      _filteredChefs = _chefs;
+    });
+    _saveUserLocations();
+  }
+
+  Future<void> _useGpsLocation() async {
+    if (!mounted) return;
+
+    setState(() => _isGettingGpsLocation = true);
+
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+
+      if (!serviceEnabled) {
+        await Geolocator.openLocationSettings();
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied) {
+        return;
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        await Geolocator.openAppSettings();
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+
+      debugPrint('GPS LAT: ${position.latitude}');
+      debugPrint('GPS LNG: ${position.longitude}');
+
+      final nearestArea = _nearestAreaFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      _applyLocationFilter(nearestArea);
+      _scrollToStoresSection();
+    } catch (e) {
+      debugPrint('GPS ERROR DETAILS: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isGettingGpsLocation = false);
+      }
+    }
+  }
+
+  void _scrollToStoresSection() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final storesContext = _storesSectionKey.currentContext;
+      if (storesContext == null) return;
+
+      Scrollable.ensureVisible(
+        storesContext,
+        duration: const Duration(milliseconds: 520),
+        curve: Curves.easeOutCubic,
+        alignment: 0.05,
+      );
+    });
   }
 
   Future<void> _loadFavorites() async {
     final prefs = await SharedPreferences.getInstance();
-    final savedChefs = prefs.getStringList('favoriteChefs') ?? [];
-    final savedRecipes = prefs.getStringList('favoriteRecipes') ?? [];
-    if (mounted) {
-      setState(() {
-        _favoriteChefs = savedChefs.toSet();
-        _favoriteRecipes = savedRecipes.toSet();
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      _favoriteChefs = (prefs.getStringList('favoriteChefs') ?? []).toSet();
+      _favoriteRecipes = (prefs.getStringList('favoriteRecipes') ?? []).toSet();
+    });
   }
 
   Future<void> _saveFavorites() async {
@@ -174,12 +458,10 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
 
   Future<void> _loadFollowing() async {
     final prefs = await SharedPreferences.getInstance();
-    final following = prefs.getStringList('followingChefs') ?? [];
-    if (mounted) {
-      setState(() {
-        _followingChefs = following.toSet();
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      _followingChefs = (prefs.getStringList('followingChefs') ?? []).toSet();
+    });
   }
 
   Future<void> _saveFollowing() async {
@@ -187,35 +469,42 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
     await prefs.setStringList('followingChefs', _followingChefs.toList());
   }
 
+  Future<Map<String, String>?> _authHeaders() async {
+    final token = await AuthService().getToken();
+    if (token != null && token.trim().isNotEmpty) {
+      return {'Authorization': 'Bearer $token'};
+    }
+    return null;
+  }
+
   Future<void> _loadChefs() async {
     if (!mounted) return;
-    setState(() {
-      _loadingChefs = true;
-    });
+    setState(() => _loadingChefs = true);
 
     try {
-      final token = await AuthService().getToken();
-      final headers = token != null && token.trim().isNotEmpty
-          ? {'Authorization': 'Bearer $token'}
-          : null;
-
       final r = await http.get(
         Uri.parse('${AppConfig.baseUrl}/chefs'),
-        headers: headers,
+        headers: await _authHeaders(),
       );
+
       if (r.statusCode == 200) {
-        final d = jsonDecode(r.body);
-        final list = (d['data'] ?? []) as List;
-        list.sort(
-          (a, b) =>
-              ((b['rating'] ?? 0) as num).compareTo((a['rating'] ?? 0) as num),
-        );
+        final list = ((jsonDecode(r.body)['data'] ?? []) as List)
+          ..sort(
+            (a, b) => ((b['rating'] ?? 0) as num).compareTo(
+              (a['rating'] ?? 0) as num,
+            ),
+          );
+
         if (mounted) {
           setState(() {
             _chefs = list;
             _filteredChefs = list;
             _loadingChefs = false;
           });
+
+          if (_selectedUserLocations.isNotEmpty) {
+            _applySelectedLocationFilters();
+          }
         }
       } else {
         if (mounted) {
@@ -227,7 +516,7 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
         }
       }
     } catch (e) {
-      print('❌ Error loading chefs: $e');
+      debugPrint('❌ Error loading chefs: $e');
       if (mounted) {
         setState(() {
           _chefs = [];
@@ -240,87 +529,66 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
 
   Future<void> _loadTrendingRecipes() async {
     if (!mounted) return;
-    setState(() {
-      _loadingTrending = true;
-    });
+    setState(() => _loadingTrending = true);
 
     try {
-      final token = await AuthService().getToken();
-      final headers = token != null && token.trim().isNotEmpty
-          ? {'Authorization': 'Bearer $token'}
-          : null;
-
       final r = await http.get(
         Uri.parse('${AppConfig.baseUrl}/recipes/trending'),
-        headers: headers,
+        headers: await _authHeaders(),
       );
+
       if (r.statusCode == 200) {
-        final d = jsonDecode(r.body);
+        final raw = (jsonDecode(r.body)['data'] ?? []) as List;
+
         if (mounted) {
           setState(() {
-            _trendingRecipes = (d['data'] ?? []).map<Map<String, dynamic>>((
-              item,
-            ) {
-              final Map<String, dynamic> m = Map<String, dynamic>.from(
-                item ?? {},
-              );
-
-              final String image = fullImageUrl(
+            _trendingRecipes = raw.map<Map<String, dynamic>>((item) {
+              final m = Map<String, dynamic>.from(item ?? {});
+              m['image'] = fullImageUrl(
                 m['image'] ?? m['dishImage'] ?? m['photo'] ?? '',
               );
-
-              m['image'] = image;
               m['chefName'] = (m['chef'] is Map)
                   ? (m['chef']['name'] ?? '')
                   : (m['chefName'] ?? '');
               m['chefImage'] = (m['chef'] is Map)
                   ? (m['chef']['profileImage'] ?? '')
                   : (m['chefImage'] ?? '');
-
               return m;
             }).toList();
             _loadingTrending = false;
           });
         }
       } else {
-        if (!mounted) return;
-        setState(() {
-          _trendingRecipes = [];
-          _loadingTrending = false;
-        });
+        if (mounted)
+          setState(() {
+            _trendingRecipes = [];
+            _loadingTrending = false;
+          });
       }
     } catch (e) {
-      print('❌ Error loading trending recipes: $e');
-      if (mounted) {
+      debugPrint('❌ Error loading trending recipes: $e');
+      if (mounted)
         setState(() {
           _trendingRecipes = [];
           _loadingTrending = false;
         });
-      }
     }
   }
 
   Future<void> _loadBanners() async {
     if (!mounted) return;
-    setState(() {
-      _loadingBanners = true;
-    });
+    setState(() => _loadingBanners = true);
 
     try {
-      final token = await AuthService().getToken();
-      final headers = token != null && token.trim().isNotEmpty
-          ? {'Authorization': 'Bearer $token'}
-          : null;
-
       final r = await http.get(
         Uri.parse('${AppConfig.baseUrl}/banners'),
-        headers: headers,
+        headers: await _authHeaders(),
       );
+
       if (r.statusCode == 200) {
-        final d = jsonDecode(r.body);
         if (mounted) {
           setState(() {
-            _banners = d['banners'] ?? [];
+            _banners = jsonDecode(r.body)['banners'] ?? [];
             _loadingBanners = false;
           });
           _startBannerTimer();
@@ -329,7 +597,7 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
         if (mounted) setState(() => _loadingBanners = false);
       }
     } catch (e) {
-      print('❌ Error loading banners: $e');
+      debugPrint('❌ Error loading banners: $e');
       if (mounted) setState(() => _loadingBanners = false);
     }
   }
@@ -350,49 +618,27 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
     });
   }
 
-  void _filterByCategory(String categoryId) {
-    setState(() {
-      _filteredChefs = categoryId == 'all'
-          ? _chefs
-          : _chefs.where((chef) {
-              final raw = chef['specialty'];
-              final specialty = raw is List
-                  ? raw.join(',').toLowerCase()
-                  : (raw ?? '').toString().toLowerCase();
-              return specialty.contains(categoryId.toLowerCase());
-            }).toList();
-    });
-  }
+  // ── Favourites / Following ───────────────────────────────────────────────────
 
   void addRecipeToGlobalFavorites(Map<String, dynamic> recipe) {
     final recipeId = (recipe['_id'] ?? recipe['id']).toString();
-
     final exists = _allRecipes.any(
       (r) => (r['_id'] ?? r['id']).toString() == recipeId,
     );
-
-    if (!exists) {
-      setState(() {
-        _allRecipes.add(recipe);
-      });
-    }
+    if (!exists) setState(() => _allRecipes.add(recipe));
   }
 
   Future<void> _toggleFavoriteChef(String chefId) async {
     await FavoriteService.toggleChef(chefId);
-
-    if (mounted) {
-      setState(() {
-        _favoriteChefs = Set.from(FavoriteService.favoriteChefs);
-      });
-    }
+    if (mounted)
+      setState(() => _favoriteChefs = Set.from(FavoriteService.favoriteChefs));
   }
 
   Future<void> _toggleFavoriteRecipe(
     String recipeId,
     Map<String, dynamic> recipe,
   ) async {
-    final enrichedRecipe = {
+    final enriched = {
       ...recipe,
       'chefName': recipe['chef']?['name'] ?? recipe['chefName'] ?? 'Chef',
       'chefImage': recipe['chef']?['profileImage'] ?? recipe['chefImage'] ?? '',
@@ -404,45 +650,46 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
           _favoriteRecipes.remove(recipeId);
         } else {
           _favoriteRecipes.add(recipeId);
-          addRecipeToGlobalFavorites(enrichedRecipe);
+          addRecipeToGlobalFavorites(enriched);
         }
       });
     }
-
     await _saveFavorites();
   }
 
   void _toggleFollowChef(String chefId) {
-    if (mounted) {
-      setState(() {
-        if (_followingChefs.contains(chefId)) {
-          _followingChefs.remove(chefId);
-        } else {
-          _followingChefs.add(chefId);
-        }
-        _saveFollowing();
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      _followingChefs.contains(chefId)
+          ? _followingChefs.remove(chefId)
+          : _followingChefs.add(chefId);
+    });
+    _saveFollowing();
   }
 
-  Future<void> _refresh() async {
-    if (mounted) {
-      setState(() {
-        _loadingChefs = true;
-        _loadingBanners = true;
-        _loadingTrending = true;
-      });
-      _contentAnim.forward(from: 0);
-    }
-    await Future.wait([_loadChefs(), _loadBanners(), _loadTrendingRecipes()]);
+  // ── Filtering ────────────────────────────────────────────────────────────────
+
+  List<dynamic> _chefsForCategory(String categoryId) {
+    if (categoryId == 'all') return _chefs;
+    return _chefs.where((chef) {
+      final raw = chef['specialty'];
+      final specialty = raw is List
+          ? raw.join(',').toLowerCase()
+          : (raw ?? '').toString().toLowerCase();
+      return specialty.contains(categoryId.toLowerCase());
+    }).toList();
   }
+
+  // ── Navigation ───────────────────────────────────────────────────────────────
 
   void _navigateToChefProfile(Map<String, dynamic> chef) {
-    final chefId = chef['_id']?.toString() ?? '';
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ChefProfileScreen(chefId: chefId, chefData: chef),
+        builder: (_) => ChefProfileScreen(
+          chefId: chef['_id']?.toString() ?? '',
+          chefData: chef,
+        ),
       ),
     );
   }
@@ -475,6 +722,20 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
     ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
   }
 
+  Future<void> _refresh() async {
+    if (mounted) {
+      setState(() {
+        _loadingChefs = true;
+        _loadingBanners = true;
+        _loadingTrending = true;
+      });
+      _contentAnim.forward(from: 0);
+    }
+    await Future.wait([_loadChefs(), _loadBanners(), _loadTrendingRecipes()]);
+  }
+
+  // ── Bottom Sheets ────────────────────────────────────────────────────────────
+
   void _showChefsBottomSheet(List<dynamic> chefs, String title) {
     showModalBottomSheet(
       context: context,
@@ -483,96 +744,41 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => DraggableScrollableSheet(
+      builder: (_) => DraggableScrollableSheet(
         initialChildSize: 0.9,
         minChildSize: 0.5,
         maxChildSize: 0.95,
         expand: false,
-        builder: (context, scrollController) {
-          return Container(
-            decoration: const BoxDecoration(
-              color: _kSurface,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(top: 12),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: _kTextDim.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: _kText,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: _kTextDim),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1, thickness: 1),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: chefs.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.restaurant_menu_outlined,
-                                size: 48,
-                                color: _kTextDim.withOpacity(0.5),
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'No chefs available',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: _kTextDim,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          controller: scrollController,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: chefs.length,
-                          itemBuilder: (context, index) {
-                            final chef = chefs[index];
-                            return _ChefListItem(
-                              chef: chef,
-                              onTap: () {
-                                Navigator.pop(context);
-                                _navigateToChefProfile(chef);
-                              },
-                            );
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: _kSurface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              _sheetHandle(),
+              _sheetHeader(title, context),
+              const Divider(height: 1, thickness: 1),
+              const SizedBox(height: 8),
+              Expanded(
+                child: chefs.isEmpty
+                    ? _emptyState('No chefs available')
+                    : ListView.builder(
+                        controller: scrollController,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: chefs.length,
+                        itemBuilder: (_, i) => _ChefListItem(
+                          chef: chefs[i],
+                          onTap: () {
+                            Navigator.pop(context);
+                            _navigateToChefProfile(chefs[i]);
                           },
                         ),
-                ),
-              ],
-            ),
-          );
-        },
+                      ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -585,423 +791,646 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => DraggableScrollableSheet(
+      builder: (_) => DraggableScrollableSheet(
         initialChildSize: 0.9,
         minChildSize: 0.5,
         maxChildSize: 0.95,
         expand: false,
-        builder: (context, scrollController) {
-          return Container(
-            decoration: const BoxDecoration(
-              color: _kSurface,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(top: 12),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: _kTextDim.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: _kText,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: _kTextDim),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1, thickness: 1),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: recipes.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.restaurant_menu_outlined,
-                                size: 48,
-                                color: _kTextDim.withOpacity(0.5),
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'No recipes available',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: _kTextDim,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: _kSurface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              _sheetHandle(),
+              _sheetHeader(title, context),
+              const Divider(height: 1, thickness: 1),
+              const SizedBox(height: 8),
+              Expanded(
+                child: recipes.isEmpty
+                    ? _emptyState('No recipes available')
+                    : ListView.builder(
+                        controller: scrollController,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: recipes.length,
+                        itemBuilder: (_, i) => _RecipeListItem(
+                          recipe: recipes[i],
+                          onTap: () {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Opening ${recipes[i]['name']}...',
                                 ),
                               ),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          controller: scrollController,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: recipes.length,
-                          itemBuilder: (context, index) {
-                            final recipe = recipes[index];
-                            return _RecipeListItem(
-                              recipe: recipe,
-                              onTap: () {
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Opening ${recipe['name']}...',
-                                    ),
-                                  ),
-                                );
-                              },
                             );
                           },
                         ),
-                ),
-              ],
-            ),
-          );
-        },
+                      ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
+  // ── Small shared widgets ──────────────────────────────────────────────────────
+
+  Widget _sheetHandle() => Container(
+    margin: const EdgeInsets.only(top: 12),
+    width: 40,
+    height: 4,
+    decoration: BoxDecoration(
+      color: _kTextDim.withOpacity(0.3),
+      borderRadius: BorderRadius.circular(2),
+    ),
+  );
+
+  Widget _sheetHeader(String title, BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: _kText,
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.close, color: _kTextDim),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ],
+    ),
+  );
+
+  Widget _emptyState(String message) => Center(
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.restaurant_menu_outlined,
+          size: 48,
+          color: _kTextDim.withOpacity(0.5),
+        ),
+        const SizedBox(height: 12),
+        Text(message, style: const TextStyle(fontSize: 14, color: _kTextDim)),
+      ],
+    ),
+  );
+
+  Widget _chefAvatarFallback(String name) => Container(
+    color: _kBluePale,
+    child: Center(
+      child: Text(
+        name.isNotEmpty ? name[0].toUpperCase() : 'C',
+        style: const TextStyle(
+          fontSize: 26,
+          fontWeight: FontWeight.bold,
+          color: _kBlue,
+        ),
+      ),
+    ),
+  );
+
+  Widget _recipeFallback() => Container(
+    height: 145,
+    color: _kBluePale,
+    child: const Center(child: Text('🍽️', style: TextStyle(fontSize: 42))),
+  );
+
+  // ── Build ─────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return CustomResponsiveNavShell(
+      currentIndex: 1,
       backgroundColor: _kSurface,
-      appBar: _buildAppBar(),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        color: _kBlue,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics(),
-          ),
-          child: FadeTransition(
-            opacity: _contentAnim,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 15),
+      onAddWaterTap: (amount) {
+        Provider.of<HomeProvider>(context, listen: false).addWaterBy(amount);
+      },
+      child: Scaffold(
+        backgroundColor: _kSurface,
+        appBar: _buildAppBar(),
+        body: RefreshIndicator(
+          onRefresh: _refresh,
+          color: _kBlue,
+          child: SingleChildScrollView(
+            controller: _pageScrollController,
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            child: FadeTransition(
+              opacity: _contentAnim,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 15),
+                  _buildHeroBanner(),
+                  const SizedBox(height: 24),
 
-                _buildHeroBanner(),
-                const SizedBox(height: 24),
-                _buildSectionHeader(
-                  'Categories',
-                  'See all →',
-                  onTapAction: () {
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => DraggableScrollableSheet(
-                        initialChildSize: .82,
-                        minChildSize: .55,
-                        maxChildSize: .95,
-                        expand: false,
-                        builder: (context, controller) {
-                          return Container(
-                            decoration: const BoxDecoration(
-                              color: _kSurface,
-                              borderRadius: BorderRadius.vertical(
-                                top: Radius.circular(28),
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                const SizedBox(height: 12),
-                                Container(
-                                  width: 45,
-                                  height: 5,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade300,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 22,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text(
-                                        "All Categories",
-                                        style: TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.w800,
-                                          color: _kText,
-                                        ),
-                                      ),
-                                      IconButton(
-                                        onPressed: () {
-                                          Navigator.pop(context);
-                                        },
-                                        icon: const Icon(Icons.close),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Divider(),
-                                Expanded(
-                                  child: GridView.builder(
-                                    controller: controller,
-                                    padding: const EdgeInsets.all(20),
-                                    itemCount: _categories.length,
-                                    gridDelegate:
-                                        const SliverGridDelegateWithFixedCrossAxisCount(
-                                          crossAxisCount: 3,
-                                          mainAxisSpacing: 18,
-                                          crossAxisSpacing: 18,
-                                          childAspectRatio: .92,
-                                        ),
-                                    itemBuilder: (_, i) {
-                                      final cat = _categories[i];
-                                      return GestureDetector(
-                                        onTap: () {
-                                          Navigator.pop(context);
-                                          List<dynamic> filtered = [];
-                                          if (cat.id == 'all') {
-                                            filtered = _chefs;
-                                          } else {
-                                            filtered = _chefs.where((chef) {
-                                              final raw = chef['specialty'];
-                                              final s = raw is List
-                                                  ? raw.join(',').toLowerCase()
-                                                  : (raw ?? '')
-                                                        .toString()
-                                                        .toLowerCase();
-                                              return s.contains(
-                                                cat.id.toLowerCase(),
-                                              );
-                                            }).toList();
-                                          }
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) =>
-                                                  CategoryChefsScreen(
-                                                    categoryId: cat.id,
-                                                    categoryName: cat.name,
-                                                    preFilteredChefs: filtered,
-                                                  ),
-                                            ),
-                                          );
-                                        },
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(
-                                              24,
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withOpacity(
-                                                  .05,
-                                                ),
-                                                blurRadius: 10,
-                                                offset: const Offset(0, 4),
-                                              ),
-                                            ],
-                                          ),
-                                          child: Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              Container(
-                                                padding: const EdgeInsets.all(
-                                                  14,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: _kBluePale,
-                                                  shape: BoxShape.circle,
-                                                ),
-                                                child: Icon(
-                                                  cat.icon,
-                                                  color: _kBlue,
-                                                  size: 28,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 10),
-                                              Text(
-                                                cat.name,
-                                                textAlign: TextAlign.center,
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 14),
-                _buildCategories(),
-                const SizedBox(height: 28),
-                _buildSectionHeader(
-                  '⭐ Top Chefs',
-                  'See Rank',
-                  onTapAction: () {
-                    _showChefsBottomSheet(_chefs, 'Top Chefs');
-                  },
-                ),
-                const SizedBox(height: 14),
-                _buildTopChefs(),
-                const SizedBox(height: 28),
-                _buildSectionHeader(
-                  '🔥 Trending Recipes',
-                  'View all →',
-                  onTapAction: () {
-                    _showRecipesBottomSheet(
+                  _buildSectionHeader(
+                    'Categories',
+                    'See all →',
+                    onTapAction: _showAllCategoriesSheet,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildCategories(),
+                  const SizedBox(height: 28),
+
+                  _buildSectionHeader(
+                    '⭐ Top Chefs',
+                    'See Rank',
+                    onTapAction: () =>
+                        _showChefsBottomSheet(_chefs, 'Top Chefs'),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTopChefs(),
+                  const SizedBox(height: 28),
+
+                  _buildSectionHeader(
+                    '🔥 Trending Recipes',
+                    'View all →',
+                    onTapAction: () => _showRecipesBottomSheet(
                       _trendingRecipes,
                       'Trending Recipes',
-                    );
-                  },
-                ),
-                const SizedBox(height: 14),
-                _buildTrendingRecipes(),
-                const SizedBox(height: 28),
-                _buildSectionHeader(
-                  '👨‍🍳 All Chefs',
-                  'View all →',
-                  onTapAction: () {
-                    _showChefsBottomSheet(_filteredChefs, 'All Chefs');
-                  },
-                ),
-                const SizedBox(height: 14),
-                _buildChefsGrid(),
-                const SizedBox(height: 40),
-              ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTrendingRecipes(),
+                  const SizedBox(height: 28),
+
+                  KeyedSubtree(
+                    key: _storesSectionKey,
+                    child: _buildSectionHeader(
+                      '👨‍🍳 All Chefs',
+                      'View all →',
+                      onTapAction: () =>
+                          _showChefsBottomSheet(_filteredChefs, 'All Chefs'),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildChefsGrid(),
+                  const SizedBox(height: 40),
+                ],
+              ),
             ),
           ),
         ),
       ),
-      bottomNavigationBar: CustomBottomNav(
-        currentIndex: 1,
-        onAddWaterTap: (amount) {
-          final provider = Provider.of<HomeProvider>(context, listen: false);
-          provider.addWaterBy(amount);
-        },
-      ),
     );
   }
+
+  // ── AppBar ────────────────────────────────────────────────────────────────────
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       backgroundColor: Colors.white,
-
-      title: SizedBox(height: 42, child: _buildTopSearchBar()),
+      titleSpacing: 10,
+      title: SizedBox(height: 42, child: _buildSearchBar()),
       actions: [
-        ValueListenableBuilder<Set<String>>(
-          valueListenable: FavoriteService.favoriteRecipesNotifier,
-          builder: (context, favs, _) {
-            final totalFavorites =
-                FavoriteService.favoriteChefs.length +
-                FavoriteService.favoriteRecipes.length;
-            return Stack(
-              clipBehavior: Clip.none,
-              children: [
-                IconButton(
-                  icon: Icon(
-                    totalFavorites > 0
-                        ? Icons.favorite
-                        : Icons.favorite_border_rounded,
-                    color: _kNavy,
-                  ),
-                  onPressed: _navigateToFavorites,
-                ),
-                if (totalFavorites > 0)
-                  Positioned(
-                    right: 6,
-                    top: 6,
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: const BoxDecoration(
-                        color: _kError,
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 16,
-                        minHeight: 16,
-                      ),
-                      child: Text(
-                        '$totalFavorites',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: _kNavy,
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
-
+        _buildLocationSideButton(),
+        _buildFavouriteButton(),
         IconButton(
           icon: const Icon(Icons.shopping_cart_outlined, color: _kNavy),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const CartScreen()),
-            );
-          },
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const CartScreen()),
+          ),
         ),
         const SizedBox(width: 8),
       ],
     );
   }
 
-  Widget _buildTopSearchBar() {
+  Widget _buildFavouriteButton() {
+    return ValueListenableBuilder<Set<String>>(
+      valueListenable: FavoriteService.favoriteRecipesNotifier,
+      builder: (_, __, ___) {
+        final total =
+            FavoriteService.favoriteChefs.length +
+            FavoriteService.favoriteRecipes.length;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            IconButton(
+              icon: Icon(
+                total > 0 ? Icons.favorite : Icons.favorite_border_rounded,
+                color: _kNavy,
+              ),
+              onPressed: _navigateToFavorites,
+            ),
+            if (total > 0)
+              Positioned(
+                right: 6,
+                top: 6,
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  decoration: const BoxDecoration(
+                    color: _kError,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '$total',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: _kNavy,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildLocationSideButton() {
+    final count = _selectedUserLocations.length;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(
+          tooltip: count == 0 ? 'Choose locations' : _selectedUserLocation,
+          icon: const Icon(Icons.location_on_rounded, color: _kNavy),
+          onPressed: _openLocationSheet,
+        ),
+        if (count > 0)
+          Positioned(
+            right: 5,
+            top: 6,
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+              decoration: const BoxDecoration(
+                color: _kBlue,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                '$count',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _openLocationSheet() {
+    _locationController.clear();
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            void refreshSheet() {
+              if (mounted) setState(() {});
+              setSheetState(() {});
+            }
+
+            void addTypedLocation() {
+              final value = _locationController.text.trim();
+              if (value.isEmpty) return;
+              _applyLocationFilter(value);
+              refreshSheet();
+            }
+
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: 18,
+                    right: 18,
+                    top: 12,
+                    bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 18,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 44,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: _kOutline.withOpacity(0.7),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: _kBluePale,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Icon(
+                              Icons.location_on_rounded,
+                              color: _kBlue,
+                              size: 23,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Choose your locations',
+                                  style: TextStyle(
+                                    color: _kText,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                SizedBox(height: 3),
+                                Text(
+                                  'Add one or more areas to find nearby stores',
+                                  style: TextStyle(
+                                    color: _kTextDim,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(sheetContext),
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: _kNavy,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _locationController,
+                              textInputAction: TextInputAction.done,
+                              onSubmitted: (_) => addTypedLocation(),
+                              decoration: InputDecoration(
+                                hintText: 'Example: رام الله، نابلس، الخليل',
+                                prefixIcon: const Icon(
+                                  Icons.search_rounded,
+                                  color: _kBlue,
+                                ),
+                                filled: true,
+                                fillColor: const Color(0xFFF7FAFE),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 12,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide(
+                                    color: _kOutline.withOpacity(0.4),
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide(
+                                    color: _kOutline.withOpacity(0.4),
+                                  ),
+                                ),
+                                focusedBorder: const OutlineInputBorder(
+                                  borderRadius: BorderRadius.all(
+                                    Radius.circular(16),
+                                  ),
+                                  borderSide: BorderSide(
+                                    color: _kBlue,
+                                    width: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            height: 50,
+                            child: ElevatedButton(
+                              onPressed: addTypedLocation,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _kBlue,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              child: const Text(
+                                'Add',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 46,
+                        child: OutlinedButton.icon(
+                          onPressed: _isGettingGpsLocation
+                              ? null
+                              : () async {
+                                  await _useGpsLocation();
+                                  refreshSheet();
+                                },
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(
+                              color: _kOutline.withOpacity(0.55),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          icon: _isGettingGpsLocation
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.my_location_rounded,
+                                  color: _kBlue,
+                                ),
+                          label: const Text(
+                            'Use GPS location',
+                            style: TextStyle(
+                              color: _kNavy,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      if (_selectedUserLocations.isNotEmpty) ...[
+                        Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Selected areas',
+                                style: TextStyle(
+                                  color: _kText,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                _clearLocationFilter();
+                                refreshSheet();
+                              },
+                              child: const Text(
+                                'Clear all',
+                                style: TextStyle(
+                                  color: _kError,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _selectedUserLocations.map((area) {
+                            return InputChip(
+                              label: Text(area),
+                              avatar: const Icon(
+                                Icons.location_on_rounded,
+                                size: 16,
+                                color: _kBlue,
+                              ),
+                              onDeleted: () {
+                                _removeLocationFilter(area);
+                                refreshSheet();
+                              },
+                              backgroundColor: _kBluePale.withOpacity(0.65),
+                              labelStyle: const TextStyle(
+                                color: _kNavy,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              deleteIconColor: _kError,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(999),
+                                side: BorderSide(
+                                  color: _kOutline.withOpacity(0.25),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 14),
+                      ],
+                      const Text(
+                        'Quick areas',
+                        style: TextStyle(
+                          color: _kText,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _palestineAreaKeywords.keys.map((area) {
+                          final selected = _selectedUserLocations.any((item) {
+                            return _normalizeLocationText(item) ==
+                                _normalizeLocationText(area);
+                          });
+
+                          return GestureDetector(
+                            onTap: () {
+                              if (selected) {
+                                _removeLocationFilter(area);
+                              } else {
+                                _applyLocationFilter(area);
+                              }
+                              refreshSheet();
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: selected ? _kBlue : _kBluePale,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                area,
+                                style: TextStyle(
+                                  color: selected ? Colors.white : _kBlue,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSearchBar() {
     return Container(
       height: 42,
-
       alignment: Alignment.center,
-
       padding: const EdgeInsets.symmetric(horizontal: 14),
-
       decoration: BoxDecoration(
         color: Colors.white,
-
         borderRadius: BorderRadius.circular(30),
-
         border: Border.all(color: Colors.grey.shade300, width: 1.2),
-
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(.04),
@@ -1010,39 +1439,24 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
           ),
         ],
       ),
-
       child: TextField(
         controller: _searchController,
-
-        onChanged: (value) {
-          setState(() {
-            _searchQuery = value.toLowerCase();
-          });
-        },
-
+        onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
         decoration: InputDecoration(
           border: InputBorder.none,
-
           hintText: 'Search',
-
           hintStyle: TextStyle(
             color: Colors.grey.shade500,
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
-
           icon: Icon(Icons.search, color: Colors.grey.shade600, size: 20),
-
           suffixIcon: _searchQuery.isNotEmpty
               ? IconButton(
                   icon: const Icon(Icons.close),
-
                   onPressed: () {
                     _searchController.clear();
-
-                    setState(() {
-                      _searchQuery = '';
-                    });
+                    setState(() => _searchQuery = '');
                   },
                 )
               : null,
@@ -1051,19 +1465,7 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
     );
   }
 
-  Widget _avatarFallback(String letter) => Container(
-    color: _kBlue,
-    child: Center(
-      child: Text(
-        letter,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    ),
-  );
+  // ── Hero Banner ───────────────────────────────────────────────────────────────
 
   Widget _buildHeroBanner() {
     if (_loadingBanners) {
@@ -1083,6 +1485,7 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
     }
 
     final hasBanners = _banners.isNotEmpty;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
@@ -1094,9 +1497,7 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
               child: PageView.builder(
                 controller: _bannerCtrl,
                 itemCount: hasBanners ? _banners.length : 1,
-                onPageChanged: (i) {
-                  if (mounted) setState(() => _bannerPage = i);
-                },
+                onPageChanged: (i) => setState(() => _bannerPage = i),
                 itemBuilder: (_, i) {
                   final b = hasBanners ? _banners[i] : null;
                   return _BannerCard(
@@ -1130,6 +1531,203 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
     );
   }
 
+  // ── User Location Filter ─────────────────────────────────────────────────────
+
+  Widget _buildLocationSelector() {
+    final hasLocation = _selectedUserLocation.trim().isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: _kOutline.withOpacity(0.45)),
+          boxShadow: [
+            BoxShadow(
+              color: _kNavy.withOpacity(0.05),
+              blurRadius: 16,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: _kBluePale,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: const Icon(
+                    Icons.location_on_rounded,
+                    color: _kBlue,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Find stores near you',
+                        style: TextStyle(
+                          color: _kText,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        hasLocation
+                            ? 'Showing stores in $_selectedUserLocation'
+                            : 'Type your area or use GPS',
+                        style: const TextStyle(
+                          color: _kTextDim,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (hasLocation)
+                  TextButton(
+                    onPressed: _clearLocationFilter,
+                    child: const Text(
+                      'Clear',
+                      style: TextStyle(
+                        color: _kError,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _locationController,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: _applyLocationFilter,
+                    decoration: InputDecoration(
+                      hintText: 'Example: رام الله، نابلس، الخليل',
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        color: _kBlue,
+                      ),
+                      filled: true,
+                      fillColor: const Color(0xFFF7FAFE),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                          color: _kOutline.withOpacity(0.4),
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                          color: _kOutline.withOpacity(0.4),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: _kBlue, width: 1.4),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: _isGettingGpsLocation ? null : _useGpsLocation,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _kNavy,
+                      disabledBackgroundColor: _kNavy.withOpacity(0.55),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    icon: _isGettingGpsLocation
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.my_location_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                    label: const Text(
+                      'GPS',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _palestineAreaKeywords.keys.take(8).map((area) {
+                final selected =
+                    _normalizeLocationText(area) ==
+                    _normalizeLocationText(_selectedUserLocation);
+
+                return GestureDetector(
+                  onTap: () => _applyLocationFilter(area),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selected ? _kBlue : _kBluePale,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      area,
+                      style: TextStyle(
+                        color: selected ? Colors.white : _kBlue,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Section Header ────────────────────────────────────────────────────────────
+
   Widget _buildSectionHeader(
     String title,
     String action, {
@@ -1152,9 +1750,7 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
           GestureDetector(
             onTap: () {
               HapticFeedback.lightImpact();
-              if (onTapAction != null) {
-                onTapAction();
-              }
+              onTapAction?.call();
             },
             child: Text(
               action,
@@ -1166,6 +1762,129 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── Categories ────────────────────────────────────────────────────────────────
+
+  void _showAllCategoriesSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: .82,
+        minChildSize: .55,
+        maxChildSize: .95,
+        expand: false,
+        builder: (context, controller) => Container(
+          decoration: const BoxDecoration(
+            color: _kSurface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 45,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'All Categories',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: _kText,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(),
+              Expanded(
+                child: GridView.builder(
+                  controller: controller,
+                  padding: const EdgeInsets.all(20),
+                  itemCount: _categories.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    mainAxisSpacing: 18,
+                    crossAxisSpacing: 18,
+                    childAspectRatio: .92,
+                  ),
+                  itemBuilder: (_, i) {
+                    final cat = _categories[i];
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CategoryChefsScreen(
+                              categoryId: cat.id,
+                              categoryName: cat.name,
+                              preFilteredChefs: _chefsForCategory(cat.id),
+                            ),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: const BoxDecoration(
+                                color: _kBluePale,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(cat.icon, color: _kBlue, size: 28),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              cat.name,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1184,29 +1903,15 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
 
           return GestureDetector(
             onTap: () {
-              if (mounted) setState(() => _selectedCategory = i);
+              setState(() => _selectedCategory = i);
               HapticFeedback.lightImpact();
-
-              List<dynamic> filteredChefsForCategory = [];
-              if (cat.id == 'all') {
-                filteredChefsForCategory = _chefs;
-              } else {
-                filteredChefsForCategory = _chefs.where((chef) {
-                  final raw = chef['specialty'];
-                  final specialty = raw is List
-                      ? raw.join(',').toLowerCase()
-                      : (raw ?? '').toString().toLowerCase();
-                  return specialty.contains(cat.id.toLowerCase());
-                }).toList();
-              }
-
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => CategoryChefsScreen(
                     categoryId: cat.id,
                     categoryName: cat.name,
-                    preFilteredChefs: filteredChefsForCategory,
+                    preFilteredChefs: _chefsForCategory(cat.id),
                   ),
                 ),
               );
@@ -1265,6 +1970,8 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
     );
   }
 
+  // ── Top Chefs ─────────────────────────────────────────────────────────────────
+
   Widget _buildTopChefs() {
     if (_loadingChefs) {
       return const SizedBox(
@@ -1273,8 +1980,7 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
       );
     }
 
-    final chefs = _chefs.isEmpty ? <dynamic>[] : _chefs.take(6).toList();
-
+    final chefs = _chefs.take(6).toList();
     if (chefs.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(horizontal: 20),
@@ -1290,7 +1996,6 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
         itemCount: chefs.length,
         itemBuilder: (_, i) {
           final chef = chefs[i] as Map<String, dynamic>;
-
           final name = (chef['name'] ?? 'Chef') as String;
           final img = (chef['profileImage'] ?? '') as String;
           final rating = ((chef['rating'] ?? 0) as num).toDouble();
@@ -1389,13 +2094,14 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
     );
   }
 
+  // ── Trending Recipes ──────────────────────────────────────────────────────────
+
   Widget _buildTrendingRecipes() {
     if (_loadingTrending) {
       return const Center(child: CircularProgressIndicator(color: _kBlue));
     }
-
     if (_trendingRecipes.isEmpty) {
-      return const Center(child: Text("No trending recipes"));
+      return const Center(child: Text('No trending recipes'));
     }
 
     final recipes = _trendingRecipes.take(8).toList();
@@ -1408,12 +2114,9 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
         itemCount: recipes.length,
         itemBuilder: (_, i) {
           final recipe = Map<String, dynamic>.from(recipes[i]);
-
           final recipeId = (recipe['_id'] ?? recipe['id']).toString();
-
           final isFav = FavoriteService.isFavoriteRecipe(recipeId);
-
-          final isTrending = i < 3;
+          final isTrend = i < 3;
 
           return Container(
             width: 220,
@@ -1425,13 +2128,14 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
                 BoxShadow(
                   color: Colors.black.withOpacity(.06),
                   blurRadius: 12,
-                  offset: Offset(0, 4),
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ── Image ──
                 Stack(
                   children: [
                     ClipRRect(
@@ -1439,29 +2143,29 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
                         top: Radius.circular(24),
                       ),
                       child: Image.network(
-                        fullImageUrl(recipe["image"]),
+                        fullImageUrl(recipe['image']),
                         height: 120,
                         width: double.infinity,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => _recipeFallback(),
+                        errorBuilder: (_, __, ___) => _recipeFallback(),
                       ),
                     ),
-                    if (isTrending)
+                    if (isTrend)
                       Positioned(
                         left: 10,
                         top: 10,
                         child: Container(
-                          padding: EdgeInsets.symmetric(
+                          padding: const EdgeInsets.symmetric(
                             horizontal: 10,
                             vertical: 5,
                           ),
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
+                            gradient: const LinearGradient(
                               colors: [Color(0xFFFFB347), Color(0xFFFF8C42)],
                             ),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Row(
+                          child: const Row(
                             children: [
                               Icon(
                                 Icons.local_fire_department,
@@ -1470,7 +2174,7 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
                               ),
                               SizedBox(width: 4),
                               Text(
-                                "Trending",
+                                'Trending',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 10,
@@ -1492,14 +2196,14 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
                         child: AnimatedSwitcher(
                           duration: const Duration(milliseconds: 300),
                           child: Container(
-                            padding: EdgeInsets.all(8),
-                            decoration: BoxDecoration(
+                            key: ValueKey(isFav),
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(
                               color: Colors.white,
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
                               isFav ? Icons.favorite : Icons.favorite_border,
-                              key: ValueKey(isFav),
                               color: Colors.red,
                               size: 18,
                             ),
@@ -1509,26 +2213,28 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
                     ),
                   ],
                 ),
+
+                // ── Info ──
                 Expanded(
                   child: Padding(
-                    padding: EdgeInsets.fromLTRB(12, 12, 12, 10),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          recipe["name"] ?? "",
+                          recipe['name'] ?? '',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        SizedBox(height: 10),
+                        const SizedBox(height: 10),
                         Row(
                           children: [
                             Container(
-                              padding: EdgeInsets.symmetric(
+                              padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
                                 vertical: 4,
                               ),
@@ -1538,11 +2244,15 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.star, color: _kAmber, size: 13),
-                                  SizedBox(width: 4),
+                                  const Icon(
+                                    Icons.star,
+                                    color: _kAmber,
+                                    size: 13,
+                                  ),
+                                  const SizedBox(width: 4),
                                   Text(
-                                    "${recipe["rating"] ?? 4.8}",
-                                    style: TextStyle(
+                                    '${recipe['rating'] ?? 4.8}',
+                                    style: const TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -1550,10 +2260,10 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
                                 ],
                               ),
                             ),
-                            Spacer(),
+                            const Spacer(),
                             Text(
-                              "\$${recipe["price"] ?? 0}",
-                              style: TextStyle(
+                              '\$${recipe['price'] ?? 0}',
+                              style: const TextStyle(
                                 color: _kBlue,
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
@@ -1561,20 +2271,18 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
                             ),
                           ],
                         ),
-                        Spacer(),
+                        const Spacer(),
                         SizedBox(
                           width: double.infinity,
                           height: 34,
                           child: ElevatedButton.icon(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      RecipeDetailScreen(recipe: recipe),
-                                ),
-                              );
-                            },
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    RecipeDetailScreen(recipe: recipe),
+                              ),
+                            ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: _kBlue,
                               elevation: 0,
@@ -1582,13 +2290,13 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
                                 borderRadius: BorderRadius.circular(10),
                               ),
                             ),
-                            icon: Icon(
+                            icon: const Icon(
                               Icons.visibility_outlined,
                               size: 14,
                               color: Colors.white,
                             ),
-                            label: Text(
-                              "View",
+                            label: const Text(
+                              'View',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 11,
@@ -1609,45 +2317,8 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
     );
   }
 
-  Widget _recipeFallback() {
-    return Container(
-      height: 145,
-      color: _kBluePale,
-      child: Center(child: Text("🍽️", style: TextStyle(fontSize: 42))),
-    );
-  }
+  // ── Chefs Grid ────────────────────────────────────────────────────────────────
 
-  Widget _badge(String text) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white24,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  Widget _chefAvatarFallback(String name) => Container(
-    color: _kBluePale,
-    child: Center(
-      child: Text(
-        name.isNotEmpty ? name[0].toUpperCase() : 'C',
-        style: const TextStyle(
-          fontSize: 26,
-          fontWeight: FontWeight.bold,
-          color: _kBlue,
-        ),
-      ),
-    ),
-  );
   Widget _buildChefsGrid() {
     if (_loadingChefs) {
       return const Padding(
@@ -1656,65 +2327,46 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
       );
     }
 
-    //
-    // 🔥 SEARCH FILTER
-    //
-    final displayedChefs = _filteredChefs.where((chef) {
+    final displayed = _filteredChefs.where((chef) {
       final name = (chef['name'] ?? '').toString().toLowerCase();
-
       final specialty = safeString(chef['specialty']).toLowerCase();
-
       return name.contains(_searchQuery) || specialty.contains(_searchQuery);
     }).toList();
 
-    //
-    // 🔥 EMPTY STATE
-    //
-    if (displayedChefs.isEmpty) {
+    if (displayed.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(24),
         child: Center(
-          child: Text('No chefs found 🔍', style: TextStyle(color: _kTextDim)),
+          child: Text(
+            'No chefs found near this area 🔍',
+            style: TextStyle(color: _kTextDim),
+          ),
         ),
       );
     }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-
       child: GridView.builder(
         shrinkWrap: true,
-
         physics: const NeverScrollableScrollPhysics(),
-
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-
           crossAxisSpacing: 14,
-
           mainAxisSpacing: 14,
-
           childAspectRatio: 0.72,
         ),
-
-        itemCount: displayedChefs.length,
-
+        itemCount: displayed.length,
         itemBuilder: (_, i) {
-          final chef = displayedChefs[i];
-
+          final chef = displayed[i];
           final chefId = chef['_id']?.toString() ?? i.toString();
 
           return _ChefCard(
             chef: chef,
-
             isFavourite: _favoriteChefs.contains(chefId),
-
             isFollowing: _followingChefs.contains(chefId),
-
             onFavouriteToggle: () => _toggleFavoriteChef(chefId),
-
             onFollowToggle: () => _toggleFollowChef(chefId),
-
             onTap: () => _navigateToChefProfile(chef),
           );
         },
@@ -1723,9 +2375,13 @@ class _HomeCooksScreenState extends State<HomeCooksScreen>
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// _BannerCard
+// ─────────────────────────────────────────────────────────────────────────────
 class _BannerCard extends StatelessWidget {
   final String imageUrl;
   final String title;
+
   const _BannerCard({required this.imageUrl, required this.title});
 
   @override
@@ -1772,9 +2428,9 @@ class _BannerCard extends StatelessWidget {
   }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// Chef Card Widget
-// ════════════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// _ChefCard
+// ─────────────────────────────────────────────────────────────────────────────
 class _ChefCard extends StatelessWidget {
   final Map<String, dynamic> chef;
   final bool isFavourite;
@@ -1793,7 +2449,7 @@ class _ChefCard extends StatelessWidget {
   });
 
   String get _bgEmoji {
-    final s = (safeString(chef['specialty']) ?? '') as String;
+    final s = safeString(chef['specialty']);
     if (s.contains('Italian')) return '🍝';
     if (s.contains('Pastry') || s.contains('Dessert')) return '🍰';
     if (s.contains('Grill')) return '🥩';
@@ -1806,11 +2462,10 @@ class _ChefCard extends StatelessWidget {
   }
 
   Color get _bgColor {
-    final s = (safeString(chef['specialty']) ?? '') as String;
+    final s = safeString(chef['specialty']);
     if (s.contains('Italian')) return const Color(0xFFFFF3E0);
-    if (s.contains('Pastry') || s.contains('Dessert')) {
+    if (s.contains('Pastry') || s.contains('Dessert'))
       return const Color(0xFFFCE4EC);
-    }
     if (s.contains('Grill')) return const Color(0xFFFFEBEE);
     if (s.contains('Vegan')) return const Color(0xFFE8F5E9);
     if (s.contains('Seafood')) return const Color(0xFFE0F7FA);
@@ -1844,6 +2499,7 @@ class _ChefCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
+            // ── Image ──
             Stack(
               children: [
                 ClipRRect(
@@ -1856,11 +2512,12 @@ class _ChefCard extends StatelessWidget {
                         ? Image.network(
                             fullImageUrl(img),
                             fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => _imgFallback(),
+                            errorBuilder: (_, __, ___) => _imgFallback(),
                           )
                         : _imgFallback(),
                   ),
                 ),
+                // Favourite button
                 Positioned(
                   top: 8,
                   right: 8,
@@ -1890,6 +2547,7 @@ class _ChefCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                // Rating badge
                 Positioned(
                   top: 8,
                   left: 8,
@@ -1923,6 +2581,8 @@ class _ChefCard extends StatelessWidget {
                 ),
               ],
             ),
+
+            // ── Info ──
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
               child: Column(
@@ -1997,40 +2657,9 @@ class _ChefCard extends StatelessWidget {
   );
 }
 
-String fullImageUrl(dynamic image) {
-  if (image == null) return '';
-
-  String img = image.toString().trim();
-
-  if (img.isEmpty) return '';
-
-  // ✅ full url
-  if (img.startsWith('http://') || img.startsWith('https://')) {
-    return img;
-  }
-
-  // ✅ remove localhost
-  img = img.replaceAll('http://localhost:5000', '');
-
-  img = img.replaceAll('http://127.0.0.1:5000', '');
-
-  // ✅ fix uploads
-  if (!img.startsWith('/uploads/')) {
-    if (img.startsWith('uploads/')) {
-      img = '/$img';
-    } else {
-      img = '/uploads/$img';
-    }
-  }
-
-  final base = AppConfig.baseUrl.replaceAll('/api', '');
-
-  return '$base$img';
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// Chef List Item Widget
-// ════════════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// _ChefListItem
+// ─────────────────────────────────────────────────────────────────────────────
 class _ChefListItem extends StatelessWidget {
   final Map<String, dynamic> chef;
   final VoidCallback onTap;
@@ -2134,9 +2763,9 @@ class _ChefListItem extends StatelessWidget {
   }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// Recipe List Item Widget
-// ════════════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// _RecipeListItem
+// ─────────────────────────────────────────────────────────────────────────────
 class _RecipeListItem extends StatelessWidget {
   final Map<String, dynamic> recipe;
   final VoidCallback onTap;
@@ -2181,11 +2810,9 @@ class _RecipeListItem extends StatelessWidget {
                     ? Image.network(
                         fullImageUrl(recipe['image']),
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) {
-                          return const Center(
-                            child: Text('🍽️', style: TextStyle(fontSize: 30)),
-                          );
-                        },
+                        errorBuilder: (_, __, ___) => const Center(
+                          child: Text('🍽️', style: TextStyle(fontSize: 30)),
+                        ),
                       )
                     : const Center(
                         child: Text('🍽️', style: TextStyle(fontSize: 30)),
@@ -2252,9 +2879,9 @@ class _RecipeListItem extends StatelessWidget {
   }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// Search Delegate
-// ════════════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// ChefSearchDelegate
+// ─────────────────────────────────────────────────────────────────────────────
 class ChefSearchDelegate extends SearchDelegate<String> {
   final List<dynamic> chefs;
   final List<dynamic> recipes;
@@ -2279,91 +2906,49 @@ class ChefSearchDelegate extends SearchDelegate<String> {
   }
 
   @override
-  List<Widget>? buildActions(BuildContext context) {
-    return [
-      IconButton(
-        icon: const Icon(Icons.clear, color: _kTeal),
-        onPressed: () {
-          query = '';
-        },
-      ),
-    ];
-  }
+  List<Widget>? buildActions(BuildContext context) => [
+    IconButton(
+      icon: const Icon(Icons.clear, color: _kTeal),
+      onPressed: () => query = '',
+    ),
+  ];
 
   @override
-  Widget? buildLeading(BuildContext context) {
-    return IconButton(
-      icon: const Icon(Icons.arrow_back, color: _kTeal),
-      onPressed: () {
-        close(context, '');
-      },
-    );
-  }
+  Widget? buildLeading(BuildContext context) => IconButton(
+    icon: const Icon(Icons.arrow_back, color: _kTeal),
+    onPressed: () => close(context, ''),
+  );
+
+  List<dynamic> _matchingChefs() => chefs.where((chef) {
+    final name = (chef['name'] ?? '').toString().toLowerCase();
+    final specialty = safeString(chef['specialty']).toLowerCase();
+    return name.contains(query.toLowerCase()) ||
+        specialty.contains(query.toLowerCase());
+  }).toList();
+
+  List<dynamic> _matchingRecipes() => recipes.where((recipe) {
+    final name = (recipe['name'] ?? '').toString().toLowerCase();
+    final chefName = (recipe['chefName'] ?? '').toString().toLowerCase();
+    return name.contains(query.toLowerCase()) ||
+        chefName.contains(query.toLowerCase());
+  }).toList();
 
   @override
   Widget buildResults(BuildContext context) {
-    final chefResults = chefs.where((chef) {
-      final name = (chef['name'] ?? '').toString().toLowerCase();
-      final specialty = safeString(chef['specialty']).toLowerCase();
-      return name.contains(query.toLowerCase()) ||
-          specialty.contains(query.toLowerCase());
-    }).toList();
+    final cf = _matchingChefs();
+    final rf = _matchingRecipes();
 
-    final recipeResults = recipes.where((recipe) {
-      final name = (recipe['name'] ?? '').toString().toLowerCase();
-      final chefName = (recipe['chefName'] ?? '').toString().toLowerCase();
-      return name.contains(query.toLowerCase()) ||
-          chefName.contains(query.toLowerCase());
-    }).toList();
-
-    final hasChefResults = chefResults.isNotEmpty;
-    final hasRecipeResults = recipeResults.isNotEmpty;
-
-    if (chefResults.isEmpty && recipeResults.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.search_off_rounded, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'No results found for "$query"',
-              style: const TextStyle(color: _kTextDim),
-            ),
-          ],
-        ),
-      );
-    }
+    if (cf.isEmpty && rf.isEmpty) return _noResults(context);
 
     return ListView(
       children: [
-        if (hasChefResults) ...[
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: Text(
-              '👨‍🍳 Chefs',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: _kBlue,
-              ),
-            ),
-          ),
-          ...chefResults.map((chef) => _buildChefTile(chef, context)),
+        if (cf.isNotEmpty) ...[
+          _sectionLabel('👨‍🍳 Chefs'),
+          ...cf.map((c) => _buildChefTile(c, context)),
         ],
-        if (hasRecipeResults) ...[
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              '🍽️ Recipes',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: _kBlue,
-              ),
-            ),
-          ),
-          ...recipeResults.map((recipe) => _buildRecipeTile(recipe, context)),
+        if (rf.isNotEmpty) ...[
+          _sectionLabel('🍽️ Recipes'),
+          ...rf.map((r) => _buildRecipeTile(r, context)),
         ],
       ],
     );
@@ -2374,17 +2959,7 @@ class ChefSearchDelegate extends SearchDelegate<String> {
     if (query.isEmpty) {
       return ListView(
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: Text(
-              '🔍 Popular Searches',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: _kBlue,
-              ),
-            ),
-          ),
+          _sectionLabel('🔍 Popular Searches'),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -2431,85 +3006,56 @@ class ChefSearchDelegate extends SearchDelegate<String> {
             ),
           ),
           const SizedBox(height: 16),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: Text(
-              '⭐ Top Chefs',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: _kBlue,
-              ),
-            ),
-          ),
-          ...chefs.take(5).map((chef) => _buildChefTile(chef, context)),
+          _sectionLabel('⭐ Top Chefs'),
+          ...chefs.take(5).map((c) => _buildChefTile(c, context)),
         ],
       );
     }
 
-    final chefResults = chefs.where((chef) {
-      final name = (chef['name'] ?? '').toString().toLowerCase();
-      final specialty = safeString(chef['specialty']).toLowerCase();
-      return name.contains(query.toLowerCase()) ||
-          specialty.contains(query.toLowerCase());
-    }).toList();
+    final cf = _matchingChefs();
+    final rf = _matchingRecipes();
 
-    final recipeResults = recipes.where((recipe) {
-      final name = (recipe['name'] ?? '').toString().toLowerCase();
-      final chefName = (recipe['chefName'] ?? '').toString().toLowerCase();
-      return name.contains(query.toLowerCase()) ||
-          chefName.contains(query.toLowerCase());
-    }).toList();
-
-    if (chefResults.isEmpty && recipeResults.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.search_off_rounded, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'No chefs or recipes found for "$query"',
-              style: const TextStyle(color: _kTextDim),
-            ),
-          ],
-        ),
-      );
-    }
+    if (cf.isEmpty && rf.isEmpty) return _noResults(context);
 
     return ListView(
       children: [
-        if (chefResults.isNotEmpty) ...[
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: Text(
-              '👨‍🍳 Chefs',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: _kBlue,
-              ),
-            ),
-          ),
-          ...chefResults.map((chef) => _buildChefTile(chef, context)),
+        if (cf.isNotEmpty) ...[
+          _sectionLabel('👨‍🍳 Chefs'),
+          ...cf.map((c) => _buildChefTile(c, context)),
         ],
-        if (recipeResults.isNotEmpty) ...[
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              '🍽️ Recipes',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: _kBlue,
-              ),
-            ),
-          ),
-          ...recipeResults.map((recipe) => _buildRecipeTile(recipe, context)),
+        if (rf.isNotEmpty) ...[
+          _sectionLabel('🍽️ Recipes'),
+          ...rf.map((r) => _buildRecipeTile(r, context)),
         ],
       ],
     );
   }
+
+  Widget _sectionLabel(String text) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.bold,
+        color: _kBlue,
+      ),
+    ),
+  );
+
+  Widget _noResults(BuildContext context) => Center(
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.search_off_rounded, size: 64, color: Colors.grey[400]),
+        const SizedBox(height: 16),
+        Text(
+          'No results found for "$query"',
+          style: const TextStyle(color: _kTextDim),
+        ),
+      ],
+    ),
+  );
 
   Widget _buildChefTile(Map<String, dynamic> chef, BuildContext context) {
     final name = chef['name'] ?? 'Chef';
@@ -2555,7 +3101,7 @@ class ChefSearchDelegate extends SearchDelegate<String> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => ChefProfileScreen(
+            builder: (_) => ChefProfileScreen(
               chefId: chef['_id']?.toString() ?? '',
               chefData: chef,
             ),
@@ -2612,9 +3158,9 @@ class ChefSearchDelegate extends SearchDelegate<String> {
   }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// Favorite Chef Card
-// ════════════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// _FavoriteChefCard
+// ─────────────────────────────────────────────────────────────────────────────
 class _FavoriteChefCard extends StatelessWidget {
   final Map<String, dynamic> chef;
   final VoidCallback onTap;
@@ -2757,9 +3303,9 @@ class _FavoriteChefCard extends StatelessWidget {
   }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// Favorite Recipe Card
-// ════════════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// _FavoriteRecipeCard
+// ─────────────────────────────────────────────────────────────────────────────
 class _FavoriteRecipeCard extends StatelessWidget {
   final Map<String, dynamic> recipe;
   final VoidCallback onRemove;
@@ -2791,11 +3337,9 @@ class _FavoriteRecipeCard extends StatelessWidget {
           Container(
             width: 100,
             height: 100,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: _kBluePale,
-              borderRadius: const BorderRadius.horizontal(
-                left: Radius.circular(20),
-              ),
+              borderRadius: BorderRadius.horizontal(left: Radius.circular(20)),
             ),
             child: const Center(
               child: Text('🍽️', style: TextStyle(fontSize: 40)),

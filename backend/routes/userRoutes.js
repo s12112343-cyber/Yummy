@@ -1,13 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const { verifyToken, adminOnly } = require('../middleware/authMiddleware');
+
 const {
   getAllUsers,
   deleteUser,
   searchUsers,
   toggleBanUser,
   createUser,
-  updateUserRole
+  updateUserRole,
+  getProfile
 } = require('../controllers/userController');
 
 // Routes
@@ -17,5 +19,7 @@ router.post('/create', verifyToken, adminOnly, createUser);
 router.patch('/:id/ban', verifyToken, adminOnly, toggleBanUser);
 router.patch('/:id/role', verifyToken, adminOnly, updateUserRole);
 router.delete('/:id', verifyToken, adminOnly, deleteUser);
+// Get current logged-in user profile
+router.get('/profile', verifyToken, getProfile);
 
 module.exports = router;

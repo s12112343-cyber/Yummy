@@ -9,8 +9,15 @@ const connectDB = require("./config/db");
 const externalRecipeRoutes = require("./routes/external_recipe_routes");
 const ingredientRoutes = require("./routes/ingredientRoutes");
 
+const {
+  bootstrapMealReminderScheduler,
+} = require("./services/mealReminderScheduler");
+
 dotenv.config();
-connectDB();
+
+connectDB().then(() => {
+  bootstrapMealReminderScheduler();
+});
 
 const app = express();
 const server = http.createServer(app);
@@ -56,7 +63,11 @@ app.use(
   cors({
     origin: function (origin, callback) {
       // Mobile app / Postman sometimes send no origin, so allow them
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        origin.startsWith("http://localhost:")
+      ) {
         return callback(null, true);
       }
 

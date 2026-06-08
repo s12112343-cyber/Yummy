@@ -13,6 +13,10 @@ const {
 	updateDailyWater,
 	fetchIngredientsForMeal,
 } = require("../controllers/mealController");
+const {
+	getMealReminders,
+	updateMealReminders,
+} = require("../controllers/mealReminderController");
 const upload = require("../middleware/aiMealUploadMiddleware");
 
 router.use("/", require("./imageMealRoutes"));
@@ -24,6 +28,8 @@ router.post("/quick-add/analyze", verifyToken, apiLimiter, analyzeQuickAddMeal);
 router.post("/analyze-photo-ai", verifyToken, apiLimiter, upload.single("image"), analyzePhotoAI);
 router.get("/previous", verifyToken, apiLimiter, getPreviousMeals);
 router.get("/saved-foods", verifyToken, apiLimiter, getPreviousMeals);
+router.get("/reminders", verifyToken, apiLimiter, getMealReminders);
+router.put("/reminders", verifyToken, apiLimiter, updateMealReminders);
 router.patch("/water", verifyToken, apiLimiter, updateDailyWater);
 router.post("/fetch-ingredients", verifyToken, apiLimiter, fetchIngredientsForMeal);
 

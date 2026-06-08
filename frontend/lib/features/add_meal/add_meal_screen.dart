@@ -146,201 +146,204 @@ class _AddMealManualScreenState extends State<AddMealManualScreen> {
                 ],
                 border: Border.all(color: const Color(0xFFF0D3D3), width: 1),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: SizedBox(
-                      height: 140,
-                      child: Lottie.asset(
-                        'assets/lottie/Warning - tekkis.json',
-                        fit: BoxFit.contain,
-                        repeat: false,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: SizedBox(
+                        height: 140,
+                        child: Lottie.asset(
+                          'assets/lottie/Warning - tekkis.json',
+                          fit: BoxFit.contain,
+                          repeat: false,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    hasAllergyIssues ? 'Allergy alert' : 'Condition alert',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppColors.deepBlue,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 20,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    hasAllergyIssues
-                        ? 'This dish contains an ingredient that may trigger your allergy.'
-                        : 'This dish may not be suitable for one of your medical conditions.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppColors.navy.withOpacity(0.78),
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      height: 1.35,
-                    ),
-                  ),
-                  if (hasAllergyIssues) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF7F6),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: const Color(0xFFF4C9C5)),
+                    const SizedBox(height: 4),
+                    Text(
+                      hasAllergyIssues ? 'Allergy alert' : 'Condition alert',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: AppColors.deepBlue,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 20,
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Matched ingredient',
-                            style: TextStyle(
-                              color: Color(0xFFB9382E),
-                              fontWeight: FontWeight.w800,
-                              fontSize: 12,
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      hasAllergyIssues
+                          ? 'This dish contains an ingredient that may trigger your allergy.'
+                          : 'This dish may not be suitable for one of your medical conditions.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.navy.withOpacity(0.78),
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        height: 1.35,
+                      ),
+                    ),
+                    if (hasAllergyIssues) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF7F6),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: const Color(0xFFF4C9C5)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Matched ingredient',
+                              style: TextStyle(
+                                color: Color(0xFFB9382E),
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ...allergyLines.map(
+                              (ingredient) => Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Text(
+                                  '• $ingredient',
+                                  style: const TextStyle(
+                                    color: Color(0xFF7D2620),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (hasAllergyIssues && hasConditionIssues)
+                      const SizedBox(height: 14),
+                    if (hasConditionIssues) ...[
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF8EB),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: const Color(0xFFF3D39A)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Condition note',
+                              style: TextStyle(
+                                color: Color(0xFF9A5F00),
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ...conditionLines.map(
+                              (line) => Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Text(
+                                  '• $line',
+                                  style: const TextStyle(
+                                    color: Color(0xFF7A4A00),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    if (hasAllergyIssues) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(false),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFB9382E),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          ...allergyLines.map(
-                            (ingredient) => Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: Text(
-                                '• $ingredient',
-                                style: const TextStyle(
-                                  color: Color(0xFF7D2620),
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ] else ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 48,
+                              child: OutlinedButton(
+                                onPressed: () =>
+                                    Navigator.of(dialogContext).pop(false),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.deepBlue,
+                                  side: const BorderSide(
+                                    color: Color(0xFFD8DDE6),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Cancel',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: SizedBox(
+                              height: 48,
+                              child: ElevatedButton(
+                                onPressed: () =>
+                                    Navigator.of(dialogContext).pop(true),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF1F8A3C),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Add anyway',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 15,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ],
                       ),
-                    ),
+                    ],
                   ],
-                  if (hasAllergyIssues && hasConditionIssues)
-                    const SizedBox(height: 14),
-                  if (hasConditionIssues) ...[
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF8EB),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: const Color(0xFFF3D39A)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Condition note',
-                            style: TextStyle(
-                              color: Color(0xFF9A5F00),
-                              fontWeight: FontWeight.w800,
-                              fontSize: 12,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          ...conditionLines.map(
-                            (line) => Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: Text(
-                                '• $line',
-                                style: const TextStyle(
-                                  color: Color(0xFF7A4A00),
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 18),
-                  if (hasAllergyIssues) ...[
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.of(dialogContext).pop(false),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFB9382E),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ] else ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 48,
-                            child: OutlinedButton(
-                              onPressed: () =>
-                                  Navigator.of(dialogContext).pop(false),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.deepBlue,
-                                side: const BorderSide(
-                                  color: Color(0xFFD8DDE6),
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                              child: const Text(
-                                'Cancel',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: SizedBox(
-                            height: 48,
-                            child: ElevatedButton(
-                              onPressed: () =>
-                                  Navigator.of(dialogContext).pop(true),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF1F8A3C),
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                              child: const Text(
-                                'Add anyway',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
+                ),
               ),
             ),
           );

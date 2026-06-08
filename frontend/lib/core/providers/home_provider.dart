@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../services/meal_service.dart';
-import '../services/water_reminder_service.dart';
 
 class HomeProvider extends ChangeNotifier {
   HomeProvider({MealService? mealService})
@@ -142,7 +141,6 @@ class HomeProvider extends ChangeNotifier {
           : DateTime.tryParse(rawLastDrink.toString())?.toLocal();
 
       _lastSummaryDate = targetDate;
-      await _scheduleWaterReminders();
     } catch (_) {
       // Keep previous state on transient failures.
     }
@@ -171,7 +169,6 @@ class HomeProvider extends ChangeNotifier {
     _lastDrinkTime = DateTime.now();
     notifyListeners();
     _persistDailyWater();
-    _scheduleWaterReminders();
   }
 
   void decrementWaterBy(int amountMl) {
@@ -182,7 +179,6 @@ class HomeProvider extends ChangeNotifier {
     }
     notifyListeners();
     _persistDailyWater();
-    _scheduleWaterReminders();
   }
 
   Future<void> _persistDailyWater() async {
@@ -196,13 +192,5 @@ class HomeProvider extends ChangeNotifier {
     } catch (_) {
       // Keep local state even if network call fails.
     }
-  }
-
-  Future<void> _scheduleWaterReminders() {
-    return WaterReminderService.scheduleForToday(
-      selectedDate: _selectedDate,
-      consumedWaterMl: _consumedWaterMl,
-      dailyWaterGoalMl: dailyWaterGoalMl,
-    );
   }
 }

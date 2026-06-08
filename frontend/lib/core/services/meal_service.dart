@@ -277,6 +277,55 @@ class MealService {
     throw Exception(data['message']?.toString() ?? 'Failed to update water');
   }
 
+  Future<Map<String, dynamic>> getMealReminders() async {
+    final response = await http
+        .get(
+          Uri.parse('${AppConfig.baseUrl}/meals/reminders').replace(
+            queryParameters: {
+              'timezoneOffsetMinutes': DateTime.now().timeZoneOffset.inMinutes
+                  .toString(),
+            },
+          ),
+          headers: await _headers(),
+        )
+        .timeout(AppConfig.requestTimeout);
+
+    final data = (jsonDecode(response.body) as Map<String, dynamic>);
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return data;
+    }
+
+    throw Exception(
+      data['message']?.toString() ?? 'Failed to load meal reminders',
+    );
+  }
+
+  Future<Map<String, dynamic>> updateMealReminders({
+    required bool enabled,
+    required List<Map<String, dynamic>> reminders,
+  }) async {
+    final response = await http
+        .put(
+          Uri.parse('${AppConfig.baseUrl}/meals/reminders'),
+          headers: await _headers(),
+          body: jsonEncode({
+            'enabled': enabled,
+            'timezoneOffsetMinutes': DateTime.now().timeZoneOffset.inMinutes,
+            'reminders': reminders,
+          }),
+        )
+        .timeout(AppConfig.requestTimeout);
+
+    final data = (jsonDecode(response.body) as Map<String, dynamic>);
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return data;
+    }
+
+    throw Exception(
+      data['message']?.toString() ?? 'Failed to update meal reminders',
+    );
+  }
+
   // ============================================================================
   // INGREDIENT FETCHING FROM INTERNET
   // ============================================================================
