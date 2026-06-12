@@ -1048,22 +1048,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         value: _formatCount(_posts.length),
                       ),
                       GestureDetector(
-                        onTap:
-                            !_isViewingOtherUser && _currentUserId().isNotEmpty
-                            ? () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => FollowersFollowingScreen(
-                                      userId: _currentUserId(),
-                                      userName: _currentUserName().isNotEmpty
-                                          ? _currentUserName()
-                                          : 'User',
-                                      initialIndex: 0,
-                                    ),
-                                  ),
-                                );
-                              }
+                        onTap: _profileTargetUserId().isNotEmpty
+                            ? () => _openFollowersFollowing(initialIndex: 0)
                             : null,
                         child: _StatItem(
                           label: 'Followers',
@@ -1071,22 +1057,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         ),
                       ),
                       GestureDetector(
-                        onTap:
-                            !_isViewingOtherUser && _currentUserId().isNotEmpty
-                            ? () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => FollowersFollowingScreen(
-                                      userId: _currentUserId(),
-                                      userName: _currentUserName().isNotEmpty
-                                          ? _currentUserName()
-                                          : 'User',
-                                      initialIndex: 1,
-                                    ),
-                                  ),
-                                );
-                              }
+                        onTap: _profileTargetUserId().isNotEmpty
+                            ? () => _openFollowersFollowing(initialIndex: 1)
                             : null,
                         child: _StatItem(
                           label: 'Following',
@@ -1126,6 +1098,38 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             const SizedBox(height: 16),
             _buildProfileActions(context),
           ],
+        ),
+      ),
+    );
+  }
+
+  String _profileTargetUserId() {
+    if (_isViewingOtherUser) {
+      return (widget.viewedUserId ?? '').trim();
+    }
+    return _currentUserId();
+  }
+
+  String _profileTargetUserName() {
+    if (_isViewingOtherUser) {
+      final viewedName = (widget.viewedUserName ?? '').trim();
+      return viewedName.isNotEmpty ? viewedName : 'User';
+    }
+    final currentName = _currentUserName();
+    return currentName.isNotEmpty ? currentName : 'User';
+  }
+
+  void _openFollowersFollowing({required int initialIndex}) {
+    final targetUserId = _profileTargetUserId();
+    if (targetUserId.isEmpty) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FollowersFollowingScreen(
+          userId: targetUserId,
+          userName: _profileTargetUserName(),
+          initialIndex: initialIndex,
         ),
       ),
     );

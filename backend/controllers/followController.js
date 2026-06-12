@@ -104,8 +104,10 @@ exports.getFollowers = async (req, res) => {
       .populate({ path: "follower_id", select: "name email _id" })
       .lean();
 
-    const followers = await Promise.all(
+    const followersRaw = await Promise.all(
       follows.map(async (follow) => {
+        if (!follow.follower_id?._id) return null;
+
         const profile = await UserProfile.findOne({ user_id: follow.follower_id._id })
           .select("image")
           .lean();
@@ -118,6 +120,7 @@ exports.getFollowers = async (req, res) => {
         };
       })
     );
+    const followers = followersRaw.filter(Boolean);
 
     return res.status(200).json({ followers, count: followers.length });
   } catch (error) {
@@ -145,8 +148,10 @@ exports.getFollowing = async (req, res) => {
       .populate({ path: "following_id", select: "name email _id" })
       .lean();
 
-    const following = await Promise.all(
+    const followingRaw = await Promise.all(
       follows.map(async (follow) => {
+        if (!follow.following_id?._id) return null;
+
         const profile = await UserProfile.findOne({ user_id: follow.following_id._id })
           .select("image")
           .lean();
@@ -159,6 +164,7 @@ exports.getFollowing = async (req, res) => {
         };
       })
     );
+    const following = followingRaw.filter(Boolean);
 
     return res.status(200).json({ following, count: following.length });
   } catch (error) {

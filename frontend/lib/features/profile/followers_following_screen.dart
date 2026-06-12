@@ -41,15 +41,15 @@ class _FollowersFollowingScreenState extends State<FollowersFollowingScreen> {
     final following = followProvider.getFollowing(widget.userId);
 
     for (var follower in followers) {
-      final userId = follower['id'] as String?;
-      if (userId != null && userId.isNotEmpty) {
+      final userId = follower['id']?.toString() ?? '';
+      if (userId.isNotEmpty) {
         await followProvider.checkFollowStatus(targetUserId: userId);
       }
     }
 
     for (var followee in following) {
-      final userId = followee['id'] as String?;
-      if (userId != null && userId.isNotEmpty) {
+      final userId = followee['id']?.toString() ?? '';
+      if (userId.isNotEmpty) {
         await followProvider.checkFollowStatus(targetUserId: userId);
       }
     }
@@ -139,9 +139,9 @@ class _UserRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final profileImage = user['profileImage'] as String? ?? '';
-    final name = user['name'] as String? ?? 'User';
-    final userId = user['id'] as String? ?? '';
+    final profileImage = user['profileImage']?.toString() ?? '';
+    final name = user['name']?.toString() ?? 'User';
+    final userId = user['id']?.toString() ?? '';
 
     return Consumer<FollowProvider>(
       builder: (context, followProvider, _) {
@@ -164,7 +164,7 @@ class _UserRow extends StatelessWidget {
                 : null,
           ),
           title: Text(name),
-          subtitle: Text(user['email'] as String? ?? ''),
+          subtitle: Text(user['email']?.toString() ?? ''),
           onTap: userId.isNotEmpty
               ? () {
                   Navigator.of(context).push(
